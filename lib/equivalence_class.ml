@@ -10,18 +10,7 @@ module Equivalence_for_blocks = struct
   module T = struct
     type t = Cfg.block
 
-    (* CR estavarache: Also look at the terminator. *)
-    let compare (block1 : t) (block2 : t) : int =
-      match
-        List.compare
-          Equivalence_comparisons.For_cfg.compare_basic_instruction
-          block1.body block2.body
-      with
-      | 0 ->
-          Equivalence_comparisons.For_cfg.compare_terminator_instruction
-            block1.terminator block2.terminator
-      | nonequal -> nonequal
-    ;;
+    let compare = Equivalence_comparisons.For_cfg.compare_block
 
     let sexp_of_t _t = Sexp.Atom "<block>"
   end

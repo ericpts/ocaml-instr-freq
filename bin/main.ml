@@ -6,7 +6,7 @@ let print_block (block : Cfg.block) =
   printf "Block %d: {\n" block.start;
   List.iter block.body ~f:(fun instruction ->
       printf
-        !"\t%{sexp:Compare_functions.Default_comparisons.For_cfg.basic};\n"
+        !"\t%{sexp:Compare_functions.Strict_comparisons.For_cfg.basic};\n"
         instruction.desc);
   printf "}\n"
 ;;
@@ -14,6 +14,7 @@ let print_block (block : Cfg.block) =
 let main file =
   let open Linear_format in
   let linear_item_info = read file in
+  Cmm.set_label linear_item_info.last_label;
   let items =
     List.filter_map linear_item_info.items ~f:(function
       | Func d ->
@@ -29,14 +30,19 @@ let main file =
           List.map layout ~f:(fun label ->
               Cfg_builder.get_block cfg_builder label |> Option.value_exn)
         in
+        (* List.iter blocks ~f:print_block; *)
         List.fold ~init:acc blocks ~f:Equivalence_class.update)
   in
-  let equivalence_counter =
-    Equivalence_class.to_alist equivalence_counter
-  in
-  List.take equivalence_counter 10
+  let equivalence_list = Equivalence_class.to_alist equivalence_counter in
+  List.take equivalence_list 10
   |> List.iter ~f:(fun (key, data) ->
-         printf "for equivalence class %d we have %d entries\n" key data)
+         printf "for equivalence class %d we have %d entries\n" key data;
+
+         printf "Representative blocks: \n";
+
+         Equivalence_class.representative_blocks equivalence_counter key
+         |> Option.value_exn |> List.iter ~f:print_block;
+         printf "========================================\n\n\n\n")
 ;;
 
 let main_command =
