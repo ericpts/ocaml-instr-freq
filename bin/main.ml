@@ -2,10 +2,12 @@ open Core
 open Ocamlcfg
 open Instr_freq
 
-let main files =
+let main files ~representatives_per_equivalence_class ~most_frequent_classes
+    =
   let open Linear_format in
   let equivalence_counter =
-    List.fold files ~init:Equivalence_class.empty
+    List.fold files
+      ~init:(Equivalence_class.empty ~representatives_per_equivalence_class)
       ~f:(fun equivalence_counter file ->
         let linear_item_info = read file in
         Cmm.set_label linear_item_info.last_label;
@@ -28,7 +30,7 @@ let main files =
             List.fold ~init:acc blocks ~f:Equivalence_class.update))
   in
   let equivalence_list = Equivalence_class.to_alist equivalence_counter in
-  List.take equivalence_list 10
+  List.take equivalence_list most_frequent_classes
   |> List.iter ~f:(fun (key, data) ->
          printf "for equivalence class %d we have %d entries\n" key data;
 
@@ -43,11 +45,22 @@ let main files =
 let main_command =
   Command.basic ~summary:"Count frequency of basic blocks."
     ~readme:(fun () ->
-      "Group contents of basic blocks based modulo register renaming, and \
-       print the most common quotients.")
+      "Group contents of basic blocks based on equivalence classes, and \
+       print the most common classes.")
     [%map_open.Command.Let_syntax
-      let files = anon (sequence ("input" %: Filename.arg_type)) in
-      fun () -> main files]
+      let files = anon (sequence ("input" %: Filename.arg_type))
+      and representatives_per_equivalence_class =
+        flag "-representatives-per-equivalence-class"
+          (optional_with_default 5 int)
+          ~doc:"n Save representative blocks for each equivalence class"
+      and most_frequent_classes =
+        flag "-most-frequent-classes"
+          (optional_with_default 10 int)
+          ~doc:"n Print most frequent equivalence classes"
+      in
+      fun () ->
+        main files ~representatives_per_equivalence_class
+          ~most_frequent_classes]
 ;;
 
 let () = Command.run main_command

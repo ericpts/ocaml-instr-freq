@@ -1,8 +1,6 @@
 open Core
 open Ocamlcfg
 
-let max_representatives_per_equivalence_class = 10
-
 type remainder = int
 
 module Equivalence_for_blocks = struct
@@ -19,6 +17,7 @@ module Equivalence_for_blocks = struct
 end
 
 type t = {
+  representatives_per_equivalence_class : int;
   equivalence_classes :
     (Cfg.block, remainder, Equivalence_for_blocks.comparator_witness) Map.t;
   frequency : (remainder, int, Int.comparator_witness) Map.t;
@@ -26,8 +25,9 @@ type t = {
     (remainder, Cfg.block list, Int.comparator_witness) Map.t;
 }
 
-let empty =
+let empty ~representatives_per_equivalence_class =
   {
+    representatives_per_equivalence_class;
     equivalence_classes = Map.empty (module Equivalence_for_blocks);
     frequency = Map.empty (module Int);
     representatives = Map.empty (module Int);
@@ -42,6 +42,7 @@ let update t block =
   in
   let equivalence_class = Map.find_exn new_equivalence_classes block in
   {
+    t with
     equivalence_classes = new_equivalence_classes;
     frequency =
       Map.update t.frequency equivalence_class ~f:(function
@@ -50,7 +51,7 @@ let update t block =
     representatives =
       Map.update t.representatives equivalence_class ~f:(function
         | Some list ->
-            if List.length list < max_representatives_per_equivalence_class
+            if List.length list < t.representatives_per_equivalence_class
             then block :: list
             else list
         | None -> [ block ]);

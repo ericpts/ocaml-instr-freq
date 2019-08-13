@@ -5,7 +5,7 @@ type remainder = int
 
 type t
 
-val empty : t
+val empty : representatives_per_equivalence_class:int -> t
 
 val update : t -> Cfg.block -> t
 
