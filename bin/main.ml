@@ -6,7 +6,7 @@ let print_block (block : Cfg.block) =
   printf "Block %d: {\n" block.start;
   List.iter block.body ~f:(fun instruction ->
       printf
-        !"\t%{sexp:Compare_functions.Strict_comparisons.For_cfg.basic};\n"
+        !"\t%{sexp:Strict_comparisons.For_cfg.basic};\n"
         instruction.desc);
   printf "}\n"
 ;;

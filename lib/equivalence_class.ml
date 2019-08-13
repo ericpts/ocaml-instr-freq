@@ -1,6 +1,5 @@
 open Core
 open Ocamlcfg
-open Compare_functions
 
 let max_representatives_per_equivalence_class = 10
 
