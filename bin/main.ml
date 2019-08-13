@@ -2,15 +2,6 @@ open Core
 open Ocamlcfg
 open Instr_freq
 
-let print_block (block : Cfg.block) =
-  printf "Block %d: {\n" block.start;
-  List.iter block.body ~f:(fun instruction ->
-      printf
-        !"\t%{sexp:Strict_comparisons.For_cfg.basic};\n"
-        instruction.desc);
-  printf "}\n"
-;;
-
 let main files =
   let open Linear_format in
   let equivalence_counter =
@@ -44,8 +35,9 @@ let main files =
          printf "Representative blocks: \n";
 
          Equivalence_class.representative_blocks equivalence_counter key
-         |> Option.value_exn |> List.iter ~f:print_block;
-         printf "========================================\n\n\n\n")
+         |> Option.value_exn
+         |> List.iter ~f:Utils.print_block;
+         printf "\n========================================\n")
 ;;
 
 let main_command =
