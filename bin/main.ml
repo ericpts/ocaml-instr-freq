@@ -9,17 +9,22 @@ let main files ~representatives_per_equivalence_class ~most_frequent_classes
     List.fold files
       ~init:(Equivalence_class.empty ~representatives_per_equivalence_class)
       ~f:(fun equivalence_counter file ->
-        let linear_item_info = read file in
-        Cmm.set_label linear_item_info.last_label;
-        let items =
-          List.filter_map linear_item_info.items ~f:(function
-            | Func d ->
-                d.decl
-                |> Cfg_builder.from_linear ~preserve_orig_labels:false
-                |> Some
-            | Data _ -> None)
+        let items = restore file in
+        (* CR estavarache: What do we do with this?
+
+           Cmm.set_label items.last_label; *)
+        let function_blocks =
+          List.filter_map items ~f:(fun item ->
+              restore_item item;
+              match item with
+              | Func d ->
+                  d.decl
+                  |> Cfg_builder.from_linear ~preserve_orig_labels:false
+                  |> Some
+              | Data _ -> None)
         in
-        List.fold items ~init:equivalence_counter ~f:(fun acc cfg_builder ->
+        List.fold function_blocks ~init:equivalence_counter
+          ~f:(fun acc cfg_builder ->
             let layout = Cfg_builder.get_layout cfg_builder in
             let blocks =
               List.map layout ~f:(fun label ->
@@ -33,9 +38,7 @@ let main files ~representatives_per_equivalence_class ~most_frequent_classes
   List.take equivalence_list most_frequent_classes
   |> List.iter ~f:(fun (key, data) ->
          printf "for equivalence class %d we have %d entries\n" key data;
-
          printf "Representative blocks: \n";
-
          Equivalence_class.representative_blocks equivalence_counter key
          |> Option.value_exn
          |> List.iter ~f:Utils.print_block;
