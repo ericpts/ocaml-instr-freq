@@ -1,4 +1,8 @@
 (library
   (name instr_freq)
   (libraries
-    ocamlcfg))
+    core
+    ocamlcfg
+  )
+ (preprocess (pps ppx_jane))
+)
