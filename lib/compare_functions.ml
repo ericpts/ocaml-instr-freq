@@ -16,6 +16,11 @@ module Default_comparisons = struct
       | Double
       | Double_u
     [@@deriving compare, sexp_of]
+
+    type raise_kind = Cmm.raise_kind =
+      | Raise_withtrace
+      | Raise_notrace
+    [@@deriving compare, sexp_of]
   end
 
   module For_arch = struct
@@ -55,6 +60,19 @@ module Default_comparisons = struct
       | Cle
       | Cge
     [@@deriving compare, sexp_of]
+
+    type float_comparison = Lambda.float_comparison =
+      | CFeq
+      | CFneq
+      | CFlt
+      | CFnlt
+      | CFgt
+      | CFngt
+      | CFle
+      | CFnle
+      | CFge
+      | CFnge
+    [@@deriving compare, sexp_of]
   end
 
   module For_mach = struct
@@ -81,6 +99,16 @@ module Default_comparisons = struct
           label_after_error : int sexp_option;
           spacetime_index : int;
         }
+    [@@deriving compare, sexp_of]
+
+    type test = Mach.test =
+      | Itruetest
+      | Ifalsetest
+      | Iinttest of integer_comparison
+      | Iinttest_imm of integer_comparison * int
+      | Ifloattest of For_lambda.float_comparison
+      | Ioddtest
+      | Ieventest
     [@@deriving compare, sexp_of]
   end
 
@@ -160,10 +188,35 @@ module Default_comparisons = struct
       | Poptrap
       | Prologue
     [@@deriving compare, sexp_of]
+
+    type condition = Cfg.condition =
+      | Always
+      | Test of For_mach.test
+    [@@deriving compare, sexp_of]
+
+    type successor = condition * int [@@deriving compare, sexp_of]
+
+    type terminator = Cfg.terminator =
+      | Branch of successor list
+      | Switch of int array
+      | Return
+      | Raise of For_cmm.raise_kind
+      | Tailcall of func_call_operation
+    [@@deriving compare, sexp_of]
   end
 end
 
 module Equivalence_comparisons = struct
+  module For_mach = struct
+    let compare_test (t1 : Mach.test) (t2 : Mach.test) : int =
+      match (t1, t2) with
+      | Mach.Iinttest_imm (icomp1, _), Mach.Iinttest_imm (icomp2, _) ->
+          Default_comparisons.For_mach.compare_integer_comparison icomp1
+            icomp2
+      | t1, t2 -> Default_comparisons.For_mach.compare_test t1 t2
+    ;;
+  end
+
   module For_cfg = struct
     let compare_operation (op1 : Cfg.operation) (op2 : Cfg.operation) : int
         =
@@ -183,13 +236,35 @@ module Equivalence_comparisons = struct
           Default_comparisons.For_cfg.compare_basic basic1 basic2
     ;;
 
-    let compare_basic_instruction (i1 : Cfg.basic Cfg.instruction)
-        (i2 : Cfg.basic Cfg.instruction) : int =
-      match compare_basic i1.desc i2.desc with
+    let compare_successor (s1 : Cfg.successor) (s2 : Cfg.successor) : int =
+      match (fst s1, fst s2) with
+      | Test t1, Test t2 -> For_mach.compare_test t1 t2
+      | s1, s2 -> Default_comparisons.For_cfg.compare_condition s1 s2
+    ;;
+
+    let compare_terminator (t1 : Cfg.terminator) (t2 : Cfg.terminator) : int
+        =
+      match (t1, t2) with
+      | Branch s1, Branch s2 -> List.compare compare_successor s1 s2
+      | t1, t2 -> Default_comparisons.For_cfg.compare_terminator t1 t2
+    ;;
+
+    let compare_instruction (i1 : 'a Cfg.instruction)
+        (i2 : 'a Cfg.instruction) ~(compare_underlying : 'a -> 'a -> int) :
+        int =
+      match compare_underlying i1.desc i2.desc with
       | 0 ->
           (* CR estavarache: Figure out how to check the registers too*)
           0
-      | x -> x
+      | nonequal -> nonequal
+    ;;
+
+    let compare_basic_instruction =
+      compare_instruction ~compare_underlying:compare_basic
+    ;;
+
+    let compare_terminator_instruction =
+      compare_instruction ~compare_underlying:compare_terminator
     ;;
   end
 end
