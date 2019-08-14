@@ -39,7 +39,15 @@ let main files ~representatives_per_equivalence_class ~most_frequent_classes
          Equivalence_class.representative_blocks equivalence_counter key
          |> Option.value_exn
          |> List.iter ~f:(Utils.print_block ~block_print_mode);
-         printf "\n========================================\n")
+         printf "\n========================================\n");
+
+  List.iter equivalence_list ~f:(fun (key, data) ->
+      Equivalence_class.representative_blocks equivalence_counter key
+      |> Option.value_exn |> List.hd_exn
+      |> (fun block -> 1 + List.length block.Cfg.body)
+      |> printf
+           !"for equivalence class %d we have %d entries; block sizes are %d\n"
+           key data)
 ;;
 
 let main_command =
