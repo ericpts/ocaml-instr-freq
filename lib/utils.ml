@@ -44,16 +44,17 @@ let emit_assembly (block : Cfg.block) =
   in
   let fundecl =
     {
-      Linear.fun_name = "<block>";
+      Linear.fun_name = "block_to_print";
       fun_body;
       fun_fast = false;
       fun_dbg = Debuginfo.none;
       fun_spacetime_shape = None;
     }
   in
-  Emit.begin_assembly ();
+  X86_proc.reset_asm_code ();
   Emit.fundecl fundecl;
-  Emit.end_assembly ()
+  X86_proc.generate_code
+    (Some (X86_gas.generate_asm !Emitaux.output_channel))
 ;;
 
 let print_block (block : Cfg.block) ~block_print_mode =
