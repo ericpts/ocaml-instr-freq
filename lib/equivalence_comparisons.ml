@@ -1,10 +1,60 @@
 open Core
 open Ocamlcfg
 
+module Modulo_register_renaming = struct
+  exception Registers_differ of int
+
+  let compare_exn (b1 : Cfg.block) (b2 : Cfg.block) : int =
+    let get_reg (b : Cfg.block) =
+      let terminator_registers =
+        Array.append b.terminator.res b.terminator.arg |> Array.to_list
+      in
+      let body_registers =
+        List.map b.body ~f:(fun desc ->
+            Array.append desc.arg desc.res |> Array.to_list)
+      in
+      let all_registers = body_registers @ [ terminator_registers ] in
+      List.map all_registers
+        ~f:
+          (List.map ~f:(fun reg ->
+               match reg.Reg.loc with
+               | Reg.Unknown -> "unkown"
+               | Reg.Reg num -> sprintf "reg#%d" num
+               | Stack location -> (
+                   match location with
+                   | Local x -> sprintf "stack#local#%d" x
+                   | Incoming x -> sprintf "stack#incoming#%d" x
+                   | Outgoing x -> sprintf "stack#outgoing#%d" x )))
+    in
+    (* printf "\n\n\n\n\n\n\n\n\n";
+     * Utils.print_block b1 ~block_print_mode:`As_cfg;
+     * Utils.print_block b2 ~block_print_mode:`As_cfg;
+     * printf
+     *   !"%{sexp: string list list}\n%{sexp: string list list}"
+     *   (get_reg b1) (get_reg b2); *)
+    let renaming_map = Hashtbl.create (module String) in
+    try
+      List.iter2_exn (get_reg b1) (get_reg b2) ~f:(fun r1 r2 ->
+          let len_r1 = List.length r1 in
+          let len_r2 = List.length r2 in
+          if len_r1 <> len_r2 then
+            raise (Registers_differ (Int.compare len_r1 len_r2));
+
+          List.iter2_exn r1 r2 ~f:(fun s1 s2 ->
+              Hashtbl.update renaming_map s1 ~f:(function
+                | Some s1_in_b2 ->
+                    if s1_in_b2 <> s2 then
+                      raise (Registers_differ (String.compare s1_in_b2 s2));
+                    s2
+                | None -> s2)));
+      0
+    with Registers_differ cmp -> cmp
+  ;;
+end
+
 module For_arch = struct
-  let compare_specific_operation
-      (op1 : Strict_comparisons.For_arch.specific_operation)
-      (op2 : Strict_comparisons.For_arch.specific_operation) : int =
+  let compare_specific_operation (op1 : Arch.specific_operation)
+      (op2 : Arch.specific_operation) : int =
     match (op1, op2) with
     | Istore_int (x1, _, _), Istore_int (x2, _, _) ->
         Nativeint.compare x1 x2
@@ -47,16 +97,16 @@ module For_cfg = struct
     match (f1, f2) with
     | External e1, External e2 ->
         Utils.chain_compare
-          (String.compare e1.func e2.func)
-          (Bool.compare e1.alloc e2.alloc)
+          (lazy (String.compare e1.func e2.func))
+          (lazy (Bool.compare e1.alloc e2.alloc))
     | Alloc a1, Alloc a2 ->
         Utils.chain_compare
-          (Int.compare a1.bytes a2.bytes)
-          (Int.compare a1.spacetime_index a2.spacetime_index)
+          (lazy (Int.compare a1.bytes a2.bytes))
+          (lazy (Int.compare a1.spacetime_index a2.spacetime_index))
     | Checkbound c1, Checkbound c2 ->
         Utils.chain_compare
-          ([%compare: int option] c1.immediate c2.immediate)
-          (Int.compare c1.spacetime_index c2.spacetime_index)
+          (lazy ([%compare: int option] c1.immediate c2.immediate))
+          (lazy (Int.compare c1.spacetime_index c2.spacetime_index))
     | f1, f2 -> Strict_comparisons.For_cfg.compare_prim_call_operation f1 f2
   ;;
 
@@ -97,8 +147,13 @@ module For_cfg = struct
   ;;
 
   let compare_block (block1 : Cfg.block) (block2 : Cfg.block) : int =
-    Utils.chain_compare
-      (List.compare compare_basic_instruction block1.body block2.body)
-      (compare_terminator_instruction block1.terminator block2.terminator)
+    Utils.chain_compare_many
+      [ lazy
+          (List.compare compare_basic_instruction block1.body block2.body);
+        lazy
+          (compare_terminator_instruction block1.terminator
+             block2.terminator);
+        lazy (Modulo_register_renaming.compare_exn block1 block2)
+      ]
   ;;
 end
