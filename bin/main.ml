@@ -3,16 +3,13 @@ open Ocamlcfg
 open Instr_freq
 
 let main files ~representatives_per_equivalence_class ~most_frequent_classes
-    =
+    ~block_print_mode =
   let open Linear_format in
   let equivalence_counter =
     List.fold files
       ~init:(Equivalence_class.empty ~representatives_per_equivalence_class)
       ~f:(fun equivalence_counter file ->
         let items = restore file in
-        (* CR estavarache: What do we do with this?
-
-           Cmm.set_label items.last_label; *)
         let function_blocks =
           List.filter_map items ~f:(fun item ->
               restore_item item;
@@ -41,7 +38,7 @@ let main files ~representatives_per_equivalence_class ~most_frequent_classes
          printf "Representative blocks: \n";
          Equivalence_class.representative_blocks equivalence_counter key
          |> Option.value_exn
-         |> List.iter ~f:Utils.print_block;
+         |> List.iter ~f:(Utils.print_block ~block_print_mode);
          printf "\n========================================\n")
 ;;
 
@@ -60,10 +57,18 @@ let main_command =
         flag "-most-frequent-classes"
           (optional_with_default 10 int)
           ~doc:"n Print most frequent equivalence classes"
+      and print_blocks_as_assembly =
+        flag "-print-block-as-assembly" no_arg
+          ~doc:"Print blocks as assembly instead of cfg format"
+      in
+      let block_print_mode =
+        match print_blocks_as_assembly with
+        | true -> `As_assembly
+        | false -> `As_cfg
       in
       fun () ->
         main files ~representatives_per_equivalence_class
-          ~most_frequent_classes]
+          ~most_frequent_classes ~block_print_mode]
 ;;
 
 let () = Command.run main_command
