@@ -23,6 +23,8 @@ module Equivalence_for_instructions = struct
       let sexp_of_t (t : t) =
         Strict_comparisons.For_cfg.sexp_of_basic t.desc
       ;;
+
+      let hash (t : t) = Strict_comparisons.For_cfg.hash_basic t.desc
     end
 
     include T
@@ -40,6 +42,8 @@ module Equivalence_for_instructions = struct
       let sexp_of_t (t : t) =
         Strict_comparisons.For_cfg.sexp_of_terminator t.desc
       ;;
+
+      let hash (t : t) = Strict_comparisons.For_cfg.hash_terminator t.desc
     end
 
     include T
@@ -47,56 +51,44 @@ module Equivalence_for_instructions = struct
   end
 
   type t = {
-    for_basic :
-      ( Cfg.basic Cfg.instruction,
-        Equivalence.t,
-        For_basic.comparator_witness )
-      Map.t;
+    for_basic : (Cfg.basic Cfg.instruction, Equivalence.t) Hashtbl.t;
     for_terminator :
-      ( Cfg.terminator Cfg.instruction,
-        Equivalence.t,
-        For_terminator.comparator_witness )
-      Map.t;
+      (Cfg.terminator Cfg.instruction, Equivalence.t) Hashtbl.t;
   }
 
   let empty =
     {
-      for_basic = Map.empty (module For_basic);
-      for_terminator = Map.empty (module For_terminator);
+      for_basic = Hashtbl.create (module For_basic);
+      for_terminator = Hashtbl.create (module For_terminator);
     }
   ;;
 
-  let next_id t = Map.length t.for_basic + Map.length t.for_terminator + 1
+  let next_id t =
+    Hashtbl.length t.for_basic + Hashtbl.length t.for_terminator + 1
+  ;;
 
   let get_id_for_basic (t : t) (instruction : Cfg.basic Cfg.instruction) =
-    match Map.find t.for_basic instruction with
-    | Some id -> (t, id)
+    match Hashtbl.find t.for_basic instruction with
+    | Some id -> id
     | None ->
         let id = next_id t in
-        ( {
-            t with
-            for_basic = Map.set t.for_basic ~key:instruction ~data:id;
-          },
-          id )
+        Hashtbl.set t.for_basic ~key:instruction ~data:id;
+        id
   ;;
 
   let get_id_for_terminator (t : t)
       (instruction : Cfg.terminator Cfg.instruction) =
-    match Map.find t.for_terminator instruction with
-    | Some id -> (t, id)
+    match Hashtbl.find t.for_terminator instruction with
+    | Some id -> id
     | None ->
         let id = next_id t in
-        ( {
-            t with
-            for_terminator =
-              Map.set t.for_terminator ~key:instruction ~data:id;
-          },
-          id )
+        Hashtbl.set t.for_terminator ~key:instruction ~data:id;
+        id
   ;;
 
-  let get_id_for_basic_opt (t : t) = Map.find t.for_basic
+  let get_id_for_basic_opt (t : t) = Hashtbl.find t.for_basic
 
-  let get_id_for_terminator_opt (t : t) = Map.find t.for_terminator
+  let get_id_for_terminator_opt (t : t) = Hashtbl.find t.for_terminator
 end
 
 module Equivalence_for_blocks = struct
@@ -122,20 +114,19 @@ module Symbolic_block = struct
 
     let of_block (b : Cfg.block)
         (instruction_equivalences : Equivalence_for_instructions.t) =
-      let equivalences, ids_for_body_reversed =
-        List.fold b.body ~init:(instruction_equivalences, [])
-          ~f:(fun (iec, list) cur ->
-            let iec, id =
-              Equivalence_for_instructions.get_id_for_basic iec cur
+      let ids_for_body_reversed =
+        List.fold b.body ~init:[] ~f:(fun acc cur ->
+            let id =
+              Equivalence_for_instructions.get_id_for_basic
+                instruction_equivalences cur
             in
-            (iec, id :: list))
+            id :: acc)
       in
-      let equivalences, id_for_terminator =
-        Equivalence_for_instructions.get_id_for_terminator equivalences
-          b.terminator
+      let id_for_terminator =
+        Equivalence_for_instructions.get_id_for_terminator
+          instruction_equivalences b.terminator
       in
-      ( equivalences,
-        id_for_terminator :: ids_for_body_reversed |> Array.of_list_rev )
+      id_for_terminator :: ids_for_body_reversed |> Array.of_list_rev
     ;;
 
     let of_block_opt (b : Cfg.block)
@@ -161,6 +152,12 @@ module Symbolic_block = struct
     let compare = [%compare: int array]
 
     let sexp_of_t = [%sexp_of: int array]
+
+    let hash t =
+      Array.fold t ~init:(Hash.alloc ()) ~f:(fun acc cur ->
+          Int.hash_fold_t acc cur)
+      |> Hash.get_hash_value
+    ;;
   end
 
   include T
@@ -169,65 +166,81 @@ end
 
 type t = {
   instruction_equivalences : Equivalence_for_instructions.t;
-  symbolic_block_equivalences :
-    ( Symbolic_block.t,
-      Equivalence.t,
-      Symbolic_block.comparator_witness )
-    Map.t;
-  frequency : (Equivalence.t, int, Int.comparator_witness) Map.t;
+  symbolic_block_equivalences : (Symbolic_block.t, Equivalence.t) Hashtbl.t;
+  frequency : (Equivalence.t, int) Hashtbl.t;
 }
 
 let empty =
   {
     instruction_equivalences = Equivalence_for_instructions.empty;
-    symbolic_block_equivalences = Map.empty (module Symbolic_block);
-    frequency = Map.empty (module Int);
+    symbolic_block_equivalences = Hashtbl.create (module Symbolic_block);
+    frequency = Hashtbl.create (module Int);
   }
 ;;
 
 let update t (block : Cfg.block) =
-  let instruction_equivalences, symbolic_block =
+  let symbolic_block =
     Symbolic_block.of_block block t.instruction_equivalences
   in
-  let symbolic_block_equivalences =
-    Map.update t.symbolic_block_equivalences symbolic_block ~f:(function
-      | Some x -> x
-      | None -> Map.length t.symbolic_block_equivalences + 1)
-  in
+  Hashtbl.update t.symbolic_block_equivalences symbolic_block ~f:(function
+    | Some x -> x
+    | None -> Hashtbl.length t.symbolic_block_equivalences + 1);
   let equivalence =
-    Map.find_exn symbolic_block_equivalences symbolic_block
+    Hashtbl.find_exn t.symbolic_block_equivalences symbolic_block
   in
-  {
-    instruction_equivalences;
-    symbolic_block_equivalences;
-    frequency =
-      Map.update t.frequency equivalence ~f:(function
-        | Some f -> f + 1
-        | None -> 1);
-  }
+  Hashtbl.update t.frequency equivalence ~f:(function
+    | Some f -> f + 1
+    | None -> 1)
 ;;
 
-let frequency t = Map.find t.frequency
+let frequency t = Hashtbl.find t.frequency
 
 let equivalence t (block : Cfg.block) : Equivalence.t option =
   let open Option.Let_syntax in
   let%bind symbolic_block =
     Symbolic_block.of_block_opt block t.instruction_equivalences
   in
-  Map.find t.symbolic_block_equivalences symbolic_block
+  Hashtbl.find t.symbolic_block_equivalences symbolic_block
 ;;
 
 let to_file t ~filename =
+  let as_alist =
+    ( Hashtbl.to_alist t.instruction_equivalences.for_basic,
+      Hashtbl.to_alist t.instruction_equivalences.for_terminator,
+      Hashtbl.to_alist t.symbolic_block_equivalences,
+      Hashtbl.to_alist t.frequency )
+  in
   Out_channel.with_file ~binary:true filename ~f:(fun out_channel ->
-      Marshal.to_channel out_channel t [ Marshal.Closures ])
+      Marshal.to_channel out_channel as_alist [])
 ;;
 
 let of_file ~filename =
-  In_channel.with_file ~binary:true filename ~f:Marshal.from_channel
+  In_channel.with_file ~binary:true filename ~f:(fun inc ->
+      let for_basic, for_terminator, symbolic_block_equivalences, frequency
+          =
+        Marshal.from_channel inc
+      in
+      {
+        instruction_equivalences =
+          {
+            Equivalence_for_instructions.for_basic =
+              for_basic
+              |> Hashtbl.of_alist_exn
+                   (module Equivalence_for_instructions.For_basic);
+            Equivalence_for_instructions.for_terminator =
+              for_terminator
+              |> Hashtbl.of_alist_exn
+                   (module Equivalence_for_instructions.For_terminator);
+          };
+        symbolic_block_equivalences =
+          symbolic_block_equivalences
+          |> Hashtbl.of_alist_exn (module Symbolic_block);
+        frequency = frequency |> Hashtbl.of_alist_exn (module Int);
+      })
 ;;
 
 let equivalences_by_frequency t =
-  Map.to_alist t.frequency
+  Hashtbl.to_alist t.frequency
   |> List.sort ~compare:(fun (_e1, f1) (_e2, f2) -> -Int.compare f1 f2)
   |> List.map ~f:fst
 ;;

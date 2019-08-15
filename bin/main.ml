@@ -44,14 +44,10 @@ let blocks_of_file (file : Filename.t) =
 let build_index files ~(index_file : Filename.t) =
   let total_number_of_files = List.length files in
   printf "Building the index...\n%!";
-  let index =
-    List.foldi files ~init:Equivalence_class.empty
-      ~f:(fun index equivalence_counter file ->
-        eprintf_progress "Processing file %d/%d\r" index
-          total_number_of_files;
-        List.fold (blocks_of_file file) ~init:equivalence_counter
-          ~f:Equivalence_class.update)
-  in
+  let index = Equivalence_class.empty in
+  List.iteri files ~f:(fun ifile file ->
+      eprintf_progress "Processing file %d/%d\r" ifile total_number_of_files;
+      List.iter (blocks_of_file file) ~f:(Equivalence_class.update index));
   let () = Equivalence_class.to_file index ~filename:index_file in
   printf "Saved index to %s\n" index_file;
   index

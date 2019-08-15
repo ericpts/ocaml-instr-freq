@@ -11,7 +11,7 @@ type t
 
 val empty : t
 
-val update : t -> Cfg.block -> t
+val update : t -> Cfg.block -> unit
 
 val equivalence : t -> Cfg.block -> Equivalence.t option
 

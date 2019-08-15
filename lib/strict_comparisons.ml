@@ -14,12 +14,12 @@ module For_cmm = struct
     | Single
     | Double
     | Double_u
-  [@@deriving compare, sexp_of]
+  [@@deriving compare, sexp_of, hash]
 
   type raise_kind = Cmm.raise_kind =
     | Raise_withtrace
     | Raise_notrace
-  [@@deriving compare, sexp_of]
+  [@@deriving compare, sexp_of, hash]
 end
 
 module For_arch = struct
@@ -29,14 +29,14 @@ module For_arch = struct
     | Iindexed2 of int
     | Iscaled of int * int
     | Iindexed2scaled of int * int
-  [@@deriving compare, sexp_of]
+  [@@deriving compare, sexp_of, hash]
 
   type float_operation = Arch.float_operation =
     | Ifloatadd
     | Ifloatsub
     | Ifloatmul
     | Ifloatdiv
-  [@@deriving compare, sexp_of]
+  [@@deriving compare, sexp_of, hash]
 
   type specific_operation = Arch.specific_operation =
     | Ilea of addressing_mode
@@ -47,7 +47,7 @@ module For_arch = struct
     | Isqrtf
     | Ifloatsqrtf of addressing_mode
     | Isextend32
-  [@@deriving compare, sexp_of]
+  [@@deriving compare, sexp_of, hash]
 end
 
 module For_lambda = struct
@@ -58,7 +58,7 @@ module For_lambda = struct
     | Cgt
     | Cle
     | Cge
-  [@@deriving compare, sexp_of]
+  [@@deriving compare, sexp_of, hash]
 
   type float_comparison = Lambda.float_comparison =
     | CFeq
@@ -71,14 +71,14 @@ module For_lambda = struct
     | CFnle
     | CFge
     | CFnge
-  [@@deriving compare, sexp_of]
+  [@@deriving compare, sexp_of, hash]
 end
 
 module For_mach = struct
   type integer_comparison = Mach.integer_comparison =
     | Isigned of For_lambda.integer_comparison
     | Iunsigned of For_lambda.integer_comparison
-  [@@deriving compare, sexp_of]
+  [@@deriving compare, sexp_of, hash]
 
   type integer_operation = Mach.integer_operation =
     | Iadd
@@ -98,7 +98,7 @@ module For_mach = struct
         label_after_error : int sexp_option;
         spacetime_index : int;
       }
-  [@@deriving compare, sexp_of]
+  [@@deriving compare, sexp_of, hash]
 
   type test = Mach.test =
     | Itruetest
@@ -108,13 +108,17 @@ module For_mach = struct
     | Ifloattest of For_lambda.float_comparison
     | Ioddtest
     | Ieventest
-  [@@deriving compare, sexp_of]
+  [@@deriving compare, sexp_of, hash]
 end
 
 module For_ident = struct
   type t = Ident.t [@@deriving compare]
 
   let sexp_of_t t = Ident.name t |> Sexp.of_string
+
+  let hash t = String.hash (Ident.name t)
+
+  let hash_fold_t state t = String.hash_fold_t state (Ident.name t)
 end
 
 module For_cfg = struct
@@ -145,7 +149,7 @@ module For_cfg = struct
         provenance : unit option;
         is_assignment : bool;
       }
-  [@@deriving compare, sexp_of]
+  [@@deriving compare, sexp_of, hash]
 
   type func_call_operation = Cfg.func_call_operation =
     | Indirect of { label_after : int }
@@ -153,7 +157,7 @@ module For_cfg = struct
         func : string;
         label_after : int;
       }
-  [@@deriving compare, sexp_of]
+  [@@deriving compare, sexp_of, hash]
 
   type prim_call_operation = Cfg.prim_call_operation =
     | External of {
@@ -171,12 +175,12 @@ module For_cfg = struct
         label_after_error : int option;
         spacetime_index : int;
       }
-  [@@deriving compare, sexp_of]
+  [@@deriving compare, sexp_of, hash]
 
   type call_operation = Cfg.call_operation =
     | P of prim_call_operation
     | F of func_call_operation
-  [@@deriving compare, sexp_of]
+  [@@deriving compare, sexp_of, hash]
 
   type basic = Cfg.basic =
     | Op of operation
@@ -186,14 +190,16 @@ module For_cfg = struct
     | Pushtrap of { lbl_handler : int }
     | Poptrap
     | Prologue
-  [@@deriving compare, sexp_of]
+  [@@deriving compare, sexp_of, hash]
 
   type condition = Cfg.condition =
     | Always
     | Test of For_mach.test
-  [@@deriving compare, sexp_of]
+  [@@deriving compare, sexp_of, hash]
 
-  type successor = condition * int [@@deriving compare, sexp_of]
+  type successor = condition * int [@@deriving compare, sexp_of, hash]
+
+  let hash_fold_array f state array = Array.fold array ~init:state ~f
 
   type terminator = Cfg.terminator =
     | Branch of successor list
@@ -201,5 +207,5 @@ module For_cfg = struct
     | Return
     | Raise of For_cmm.raise_kind
     | Tailcall of func_call_operation
-  [@@deriving compare, sexp_of]
+  [@@deriving compare, sexp_of, hash]
 end
