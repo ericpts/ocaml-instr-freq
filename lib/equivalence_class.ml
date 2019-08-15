@@ -1,7 +1,6 @@
 open Core
 open Ocamlcfg
-
-type remainder = int
+module Equivalence = Int
 
 module Equivalence_for_instructions = struct
   module For_basic = struct
@@ -50,12 +49,12 @@ module Equivalence_for_instructions = struct
   type t = {
     for_basic :
       ( Cfg.basic Cfg.instruction,
-        remainder,
+        Equivalence.t,
         For_basic.comparator_witness )
       Map.t;
     for_terminator :
       ( Cfg.terminator Cfg.instruction,
-        remainder,
+        Equivalence.t,
         For_terminator.comparator_witness )
       Map.t;
   }
@@ -94,6 +93,10 @@ module Equivalence_for_instructions = struct
           },
           id )
   ;;
+
+  let get_id_for_basic_opt (t : t) = Map.find t.for_basic
+
+  let get_id_for_terminator_opt (t : t) = Map.find t.for_terminator
 end
 
 module Equivalence_for_blocks = struct
@@ -115,10 +118,10 @@ end
 module Symbolic_block = struct
   module T = struct
     (* This contains the unique id of every instruction *)
-    type t = remainder array
+    type t = Equivalence.t array
 
     let of_block (b : Cfg.block)
-        ~(instruction_equivalences : Equivalence_for_instructions.t) =
+        (instruction_equivalences : Equivalence_for_instructions.t) =
       let equivalences, ids_for_body_reversed =
         List.fold b.body ~init:(instruction_equivalences, [])
           ~f:(fun (iec, list) cur ->
@@ -132,8 +135,27 @@ module Symbolic_block = struct
           b.terminator
       in
       ( equivalences,
-        id_for_terminator :: ids_for_body_reversed
-        |> List.rev |> Array.of_list )
+        id_for_terminator :: ids_for_body_reversed |> Array.of_list_rev )
+    ;;
+
+    let of_block_opt (b : Cfg.block)
+        (instruction_equivalences : Equivalence_for_instructions.t) =
+      let open Option.Let_syntax in
+      let%bind for_body_rev =
+        List.map b.body
+          ~f:
+            (Equivalence_for_instructions.get_id_for_basic_opt
+               instruction_equivalences)
+        |> List.fold ~init:(Some []) ~f:(fun acc cur ->
+               let%bind acc = acc in
+               let%map cur = cur in
+               cur :: acc)
+      in
+      let%map for_terminator =
+        Equivalence_for_instructions.get_id_for_terminator_opt
+          instruction_equivalences b.terminator
+      in
+      for_terminator :: for_body_rev |> Array.of_list_rev
     ;;
 
     let compare = [%compare: int array]
@@ -147,34 +169,65 @@ end
 
 type t = {
   instruction_equivalences : Equivalence_for_instructions.t;
-  frequency :
-    (Symbolic_block.t, int, Symbolic_block.comparator_witness) Map.t;
+  symbolic_block_equivalences :
+    ( Symbolic_block.t,
+      Equivalence.t,
+      Symbolic_block.comparator_witness )
+    Map.t;
+  frequency : (Equivalence.t, int, Int.comparator_witness) Map.t;
 }
 
 let empty =
   {
     instruction_equivalences = Equivalence_for_instructions.empty;
-    frequency = Map.empty (module Symbolic_block);
+    symbolic_block_equivalences = Map.empty (module Symbolic_block);
+    frequency = Map.empty (module Int);
   }
 ;;
 
 let update t (block : Cfg.block) =
   let instruction_equivalences, symbolic_block =
-    Symbolic_block.of_block
-      ~instruction_equivalences:t.instruction_equivalences block
+    Symbolic_block.of_block block t.instruction_equivalences
+  in
+  let symbolic_block_equivalences =
+    Map.update t.symbolic_block_equivalences symbolic_block ~f:(function
+      | Some x -> x
+      | None -> Map.length t.symbolic_block_equivalences + 1)
+  in
+  let equivalence =
+    Map.find_exn symbolic_block_equivalences symbolic_block
   in
   {
     instruction_equivalences;
+    symbolic_block_equivalences;
     frequency =
-      Map.update t.frequency symbolic_block ~f:(function
+      Map.update t.frequency equivalence ~f:(function
         | Some f -> f + 1
         | None -> 1);
   }
 ;;
 
-(* let to_alist t =
- *   Map.to_alist t.frequency
- *   |> List.sort ~compare:(fun (_r1, f1) (_r2, f2) -> -Int.compare f1 f2)
- * ;;
- * 
- * let representative_blocks t remainder = Map.find t.representatives remainder *)
+let frequency t = Map.find t.frequency
+
+let equivalence t (block : Cfg.block) : Equivalence.t option =
+  let open Option.Let_syntax in
+  let%bind symbolic_block =
+    Symbolic_block.of_block_opt block t.instruction_equivalences
+  in
+  Map.find t.symbolic_block_equivalences symbolic_block
+;;
+
+let to_file t ~filename =
+  Out_channel.with_file ~binary:true filename ~f:(fun out_channel ->
+      Marshal.to_channel out_channel t [ Marshal.Closures ])
+;;
+
+let of_file ~filename =
+  In_channel.with_file ~binary:true filename ~f:Marshal.from_channel
+;;
+
+let equivalences_by_frequency t =
+  Map.to_alist t.frequency
+  |> List.sort ~compare:(fun (_e1, f1) (_e2, f2) -> -Int.compare f1 f2)
+  |> List.map ~f:fst
+;;
