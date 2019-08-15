@@ -1,8 +1,9 @@
 (executable
  (name main)
  (libraries
-   core
-   ocamlcfg
-   instr_freq)
-  (preprocess (pps ppx_jane))
-)
+  core
+  ocamlcfg
+  instr_freq
+ )
+ (preprocess (pps ppx_jane))
+ )

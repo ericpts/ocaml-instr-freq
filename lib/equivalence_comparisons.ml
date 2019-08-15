@@ -134,8 +134,11 @@ module For_cfg = struct
   let compare_instruction (i1 : 'a Cfg.instruction)
       (i2 : 'a Cfg.instruction) ~(compare_underlying : 'a -> 'a -> int) :
       int =
-    (* CR estavarache: Maybe also check the registers. *)
-    compare_underlying i1.desc i2.desc
+    Utils.chain_compare_many
+      [ lazy (compare_underlying i1.desc i2.desc);
+        lazy (Int.compare (Array.length i1.arg) (Array.length i2.arg));
+        lazy (Int.compare (Array.length i1.res) (Array.length i2.res))
+      ]
   ;;
 
   let compare_basic_instruction =
