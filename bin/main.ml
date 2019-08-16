@@ -46,7 +46,7 @@ let build_index files ~(index_file : Filename.t) =
   printf "Building the index...\n%!";
   let index = Index.empty () in
   List.iteri files ~f:(fun ifile file ->
-      eprintf_progress "Processing file %d/%d; Load: %s \r" ifile
+      eprintf_progress "Processing file %d/%d; Index load: %s \r" ifile
         total_number_of_files (Index.print_load index);
 
       List.iter (blocks_of_file file) ~f:(fun block ->

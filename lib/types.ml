@@ -184,8 +184,12 @@ module From_cfg = struct
     | Const_float of (int64[@compare.ignore])
     | Const_symbol of (string[@compare.ignore])
     | Stackoffset of int
-    | Load of From_cmm.memory_chunk * From_arch.addressing_mode
-    | Store of From_cmm.memory_chunk * From_arch.addressing_mode * bool
+    | Load of
+        From_cmm.memory_chunk * (From_arch.addressing_mode[@compare.ignore])
+    | Store of
+        From_cmm.memory_chunk
+        * (From_arch.addressing_mode[@compare.ignore])
+        * bool
     | Intop of From_mach.integer_operation
     | Intop_imm of From_mach.integer_operation * (int[@compare.ignore])
     | Negf
@@ -208,14 +212,14 @@ module From_cfg = struct
   type func_call_operation = Cfg.func_call_operation =
     | Indirect of { label_after : int [@compare.ignore] }
     | Immediate of {
-        func : string;
+        func : string; [@compare.ignore]
         label_after : int; [@compare.ignore]
       }
   [@@deriving compare, sexp_of, hash]
 
   type prim_call_operation = Cfg.prim_call_operation =
     | External of {
-        func : string;
+        func : string; [@compare.ignore]
         alloc : bool;
         label_after : int; [@compare.ignore]
       }
@@ -241,7 +245,7 @@ module From_cfg = struct
     | Call of call_operation
     | Reloadretaddr
     | Entertrap
-    | Pushtrap of { lbl_handler : int }
+    | Pushtrap of { lbl_handler : int [@compare.ignore] }
     | Poptrap
     | Prologue
   [@@deriving compare, sexp_of, hash]
@@ -256,8 +260,8 @@ module From_cfg = struct
   let hash_fold_array f state array = Array.fold array ~init:state ~f
 
   type terminator = Cfg.terminator =
-    | Branch of successor list
-    | Switch of int array
+    | Branch of (successor list[@compare.ignore])
+    | Switch of (int array[@compare.ignore])
     | Return
     | Raise of From_cmm.raise_kind
     | Tailcall of func_call_operation
@@ -279,16 +283,5 @@ module From_cfg = struct
 
   let compare_terminator_instruction =
     compare_instruction ~compare_underlying:compare_terminator
-  ;;
-
-  let compare_block (block1 : Cfg.block) (block2 : Cfg.block) : int =
-    chain_compare
-      [ lazy
-          (List.compare compare_basic_instruction block1.body block2.body);
-        lazy
-          (compare_terminator_instruction block1.terminator
-             block2.terminator);
-        lazy (Modulo_register_renaming.compare_exn block1 block2)
-      ]
   ;;
 end

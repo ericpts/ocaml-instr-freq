@@ -52,8 +52,11 @@ module Equivalence_for_instructions = struct
 
   let empty () =
     {
-      for_basic = Hashtbl.create ~size:100_000 (module For_basic);
-      for_terminator = Hashtbl.create ~size:100_000 (module For_terminator);
+      for_basic =
+        Hashtbl.create ~size:2_000 ~growth_allowed:false (module For_basic);
+      for_terminator =
+        Hashtbl.create ~size:100 ~growth_allowed:false
+          (module For_terminator);
     }
   ;;
 
@@ -83,19 +86,6 @@ module Equivalence_for_instructions = struct
   let get_id_for_basic_opt (t : t) = Hashtbl.find t.for_basic
 
   let get_id_for_terminator_opt (t : t) = Hashtbl.find t.for_terminator
-end
-
-module Equivalence_for_blocks = struct
-  module T = struct
-    type t = Cfg.block
-
-    let compare = Types.From_cfg.compare_block
-
-    let sexp_of_t _t = Sexp.Atom "<block>"
-  end
-
-  include T
-  include Comparator.Make (T)
 end
 
 (* The symbolic block can be thought of as a representative for an
@@ -161,15 +151,16 @@ end
 type t = {
   instruction_equivalences : Equivalence_for_instructions.t;
   symbolic_block_equivalences : (Symbolic_block.t, Equivalence.t) Hashtbl.t;
-  frequency : (Equivalence.t, int) Hashtbl.t; (* TODO: change to array.*)
+  mutable frequency : int Array.t;
 }
 
 let empty () =
   {
     instruction_equivalences = Equivalence_for_instructions.empty ();
     symbolic_block_equivalences =
-      Hashtbl.create ~size:100_000 (module Symbolic_block);
-    frequency = Hashtbl.create ~size:100_000 (module Int);
+      Hashtbl.create ~size:100_000 ~growth_allowed:false
+        (module Symbolic_block);
+    frequency = Array.create ~len:200_000 0;
   }
 ;;
 
@@ -183,12 +174,21 @@ let update t (block : Cfg.block) =
   let equivalence =
     Hashtbl.find_exn t.symbolic_block_equivalences symbolic_block
   in
-  Hashtbl.update t.frequency equivalence ~f:(function
-    | Some f -> f + 1
-    | None -> 1)
+  if equivalence >= Array.length t.frequency then (
+    let new_frequency =
+      Array.create ~len:(Array.length t.frequency * 2) 0
+    in
+    Array.iteri t.frequency ~f:(fun i x -> new_frequency.(i) <- x);
+    t.frequency <- new_frequency );
+
+  t.frequency.(equivalence) <- t.frequency.(equivalence) + 1
 ;;
 
-let frequency t = Hashtbl.find t.frequency
+let frequency t equivalence =
+  if equivalence < Array.length t.frequency then
+    Some t.frequency.(equivalence)
+  else None
+;;
 
 let equivalence t (block : Cfg.block) : Equivalence.t option =
   let open Option.Let_syntax in
@@ -199,11 +199,13 @@ let equivalence t (block : Cfg.block) : Equivalence.t option =
 ;;
 
 let to_file t ~filename =
+  (* We cannot directly marshal the hash tables themselves, as they contain
+     closures. *)
   let as_alist =
     ( Hashtbl.to_alist t.instruction_equivalences.for_basic,
       Hashtbl.to_alist t.instruction_equivalences.for_terminator,
       Hashtbl.to_alist t.symbolic_block_equivalences,
-      Hashtbl.to_alist t.frequency )
+      t.frequency )
   in
   Out_channel.with_file ~binary:true filename ~f:(fun out_channel ->
       Marshal.to_channel out_channel as_alist [])
@@ -230,19 +232,19 @@ let of_file ~filename =
         symbolic_block_equivalences =
           symbolic_block_equivalences
           |> Hashtbl.of_alist_exn (module Symbolic_block);
-        frequency = frequency |> Hashtbl.of_alist_exn (module Int);
+        frequency;
       })
 ;;
 
 let equivalences_by_frequency t =
-  Hashtbl.to_alist t.frequency
-  |> List.sort ~compare:(fun (_e1, f1) (_e2, f2) -> -Int.compare f1 f2)
-  |> List.map ~f:fst
+  let with_indices = Array.mapi t.frequency ~f:(fun i f -> (f, i)) in
+  Array.sort with_indices ~compare:[%compare: int * int];
+  Array.map with_indices ~f:fst |> Array.to_list
 ;;
 
 let print_load t =
-  sprintf "Symbolic_blocks: %d; Instructions: %d %d"
+  sprintf "Symbolic_blocks: %d; Instructions: (basic: %d) (terminator: %d)"
     (Hashtbl.length t.symbolic_block_equivalences)
-    (Hashtbl.length t.instruction_equivalences.for_terminator)
     (Hashtbl.length t.instruction_equivalences.for_basic)
+    (Hashtbl.length t.instruction_equivalences.for_terminator)
 ;;
