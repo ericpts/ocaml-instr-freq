@@ -149,8 +149,8 @@ module From_mach = struct
     | Iasr
     | Icomp of integer_comparison
     | Icheckbound of {
-        label_after_error : int sexp_option;
-        spacetime_index : int;
+        label_after_error : int sexp_option; [@compare.ignore]
+        spacetime_index : int; [@compare.ignore]
       }
   [@@deriving compare, sexp_of, hash]
 

@@ -53,10 +53,9 @@ module Equivalence_for_instructions = struct
   let empty () =
     {
       for_basic =
-        Hashtbl.create ~size:2_000 ~growth_allowed:false (module For_basic);
+        Hashtbl.create ~size:2_000 ~growth_allowed:true (module For_basic);
       for_terminator =
-        Hashtbl.create ~size:100 ~growth_allowed:false
-          (module For_terminator);
+        Hashtbl.create ~size:100 ~growth_allowed:true (module For_terminator);
     }
   ;;
 
@@ -158,7 +157,7 @@ let empty () =
   {
     instruction_equivalences = Equivalence_for_instructions.empty ();
     symbolic_block_equivalences =
-      Hashtbl.create ~size:100_000 ~growth_allowed:false
+      Hashtbl.create ~size:100_000 ~growth_allowed:true
         (module Symbolic_block);
     frequency = Array.create ~len:200_000 0;
   }
@@ -238,7 +237,8 @@ let of_file ~filename =
 
 let equivalences_by_frequency t =
   let with_indices = Array.mapi t.frequency ~f:(fun i f -> (f, i)) in
-  Array.sort with_indices ~compare:[%compare: int * int];
+  Array.sort with_indices ~compare:(fun (f1, _e1) (f2, _e2) ->
+      -Int.compare f1 f2);
   Array.map with_indices ~f:fst |> Array.to_list
 ;;
 
