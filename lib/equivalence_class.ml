@@ -56,10 +56,10 @@ module Equivalence_for_instructions = struct
       (Cfg.terminator Cfg.instruction, Equivalence.t) Hashtbl.t;
   }
 
-  let empty =
+  let empty () =
     {
-      for_basic = Hashtbl.create (module For_basic);
-      for_terminator = Hashtbl.create (module For_terminator);
+      for_basic = Hashtbl.create ~size:100_000 (module For_basic);
+      for_terminator = Hashtbl.create ~size:100_000 (module For_terminator);
     }
   ;;
 
@@ -170,11 +170,12 @@ type t = {
   frequency : (Equivalence.t, int) Hashtbl.t;
 }
 
-let empty =
+let empty () =
   {
-    instruction_equivalences = Equivalence_for_instructions.empty;
-    symbolic_block_equivalences = Hashtbl.create (module Symbolic_block);
-    frequency = Hashtbl.create (module Int);
+    instruction_equivalences = Equivalence_for_instructions.empty ();
+    symbolic_block_equivalences =
+      Hashtbl.create ~size:100_000 (module Symbolic_block);
+    frequency = Hashtbl.create ~size:100_000 (module Int);
   }
 ;;
 

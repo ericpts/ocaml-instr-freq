@@ -9,7 +9,7 @@ end
 
 type t
 
-val empty : t
+val empty : unit -> t
 
 val update : t -> Cfg.block -> unit
 

@@ -44,7 +44,7 @@ let blocks_of_file (file : Filename.t) =
 let build_index files ~(index_file : Filename.t) =
   let total_number_of_files = List.length files in
   printf "Building the index...\n%!";
-  let index = Equivalence_class.empty in
+  let index = Equivalence_class.empty () in
   List.iteri files ~f:(fun ifile file ->
       eprintf_progress "Processing file %d/%d\r" ifile total_number_of_files;
       List.iter (blocks_of_file file) ~f:(Equivalence_class.update index));
