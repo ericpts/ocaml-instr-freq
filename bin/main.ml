@@ -44,11 +44,14 @@ let blocks_of_file (file : Filename.t) =
 let build_index files ~(index_file : Filename.t) =
   let total_number_of_files = List.length files in
   printf "Building the index...\n%!";
-  let index = Equivalence_class.empty () in
+  let index = Index.empty () in
   List.iteri files ~f:(fun ifile file ->
-      eprintf_progress "Processing file %d/%d\r" ifile total_number_of_files;
-      List.iter (blocks_of_file file) ~f:(Equivalence_class.update index));
-  let () = Equivalence_class.to_file index ~filename:index_file in
+      eprintf_progress "Processing file %d/%d; Load: %s \r" ifile
+        total_number_of_files (Index.print_load index);
+
+      List.iter (blocks_of_file file) ~f:(fun block ->
+          Index.update index block));
+  let () = Index.to_file index ~filename:index_file in
   printf "Saved index to %s\n" index_file;
   index
 ;;
@@ -57,12 +60,12 @@ let print_most_popular_classes index ~n_most_frequent_equivalences
     ~max_representatives_per_equivalence ~block_print_mode =
   let equivalences_to_print =
     List.take
-      (Equivalence_class.equivalences_by_frequency index)
+      (Index.equivalences_by_frequency index)
       n_most_frequent_equivalences
-    |> Set.of_list (module Equivalence_class.Equivalence)
+    |> Set.of_list (module Index.Equivalence)
   in
   let how_many_printed_for_equivalence =
-    Hashtbl.create (module Equivalence_class.Equivalence)
+    Hashtbl.create (module Index.Equivalence)
   in
   let on_block block equivalence frequency =
     match Set.mem equivalences_to_print equivalence with
@@ -108,7 +111,7 @@ let main files ~index_file ~max_representatives_per_equivalence
   let index =
     if Sys.file_exists_exn index_file then (
       printf "Using cached index from %s\n%!" index_file;
-      Equivalence_class.of_file ~filename:index_file )
+      Index.of_file ~filename:index_file )
     else build_index files ~index_file
   in
   let on_block, on_finish_iteration =
@@ -132,11 +135,10 @@ let main files ~index_file ~max_representatives_per_equivalence
       List.iter (blocks_of_file file) ~f:(fun block ->
           if List.length block.body + 1 >= min_block_size then
             let equivalence =
-              Equivalence_class.equivalence index block |> Option.value_exn
+              Index.equivalence index block |> Option.value_exn
             in
             let frequency =
-              Equivalence_class.frequency index equivalence
-              |> Option.value_exn
+              Index.frequency index equivalence |> Option.value_exn
             in
             if frequency >= min_equivalence_class_size then
               on_block block equivalence frequency));

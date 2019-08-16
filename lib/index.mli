@@ -22,3 +22,5 @@ val to_file : t -> filename:Filename.t -> unit
 val of_file : filename:Filename.t -> t
 
 val equivalences_by_frequency : t -> Equivalence.t list
+
+val print_load : t -> string

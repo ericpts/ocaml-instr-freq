@@ -1,21 +1,6 @@
 open Ocamlcfg
 open Core
 
-let chain_compare c1 c2 =
-  match Lazy.force c1 with
-  | 0 -> Lazy.force c2
-  | x -> x
-;;
-
-let chain_compare_many list =
-  List.fold_until list ~init:0
-    ~f:(fun acc cur ->
-      match acc with
-      | 0 -> Continue_or_stop.Continue (Lazy.force cur)
-      | x -> Continue_or_stop.Stop x)
-    ~finish:Fn.id
-;;
-
 type basic_color =
   | Black
   | Red
@@ -73,12 +58,10 @@ let print_block (block : Cfg.block) ~block_print_mode =
   | `As_assembly -> emit_assembly block
   | `As_cfg ->
       List.iter block.body ~f:(fun instruction ->
-          printf
-            !"\t%{sexp:Strict_comparisons.For_cfg.basic};\n"
-            instruction.desc);
+          printf !"\t%{sexp:Types.From_cfg.basic};\n" instruction.desc);
 
       printf
-        !"\t#-%{sexp:Strict_comparisons.For_cfg.terminator}-#\n"
+        !"\t#-%{sexp:Types.From_cfg.terminator}-#\n"
         block.terminator.desc );
 
   print_endline (color Green "}")

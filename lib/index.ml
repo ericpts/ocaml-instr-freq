@@ -17,14 +17,12 @@ module Equivalence_for_instructions = struct
 
            One solution to this would be to first do register-renaming, and
            then only after that to hash the instructions. *)
-        Equivalence_comparisons.For_cfg.compare_basic_instruction
+        Types.From_cfg.compare_basic_instruction
       ;;
 
-      let sexp_of_t (t : t) =
-        Strict_comparisons.For_cfg.sexp_of_basic t.desc
-      ;;
+      let sexp_of_t (t : t) = Types.From_cfg.sexp_of_basic t.desc
 
-      let hash (t : t) = Strict_comparisons.For_cfg.hash_basic t.desc
+      let hash (t : t) = Types.From_cfg.hash_basic t.desc
     end
 
     include T
@@ -35,15 +33,11 @@ module Equivalence_for_instructions = struct
     module T = struct
       type t = Cfg.terminator Cfg.instruction
 
-      let compare =
-        Equivalence_comparisons.For_cfg.compare_terminator_instruction
-      ;;
+      let compare = Types.From_cfg.compare_terminator_instruction
 
-      let sexp_of_t (t : t) =
-        Strict_comparisons.For_cfg.sexp_of_terminator t.desc
-      ;;
+      let sexp_of_t (t : t) = Types.From_cfg.sexp_of_terminator t.desc
 
-      let hash (t : t) = Strict_comparisons.For_cfg.hash_terminator t.desc
+      let hash (t : t) = Types.From_cfg.hash_terminator t.desc
     end
 
     include T
@@ -95,7 +89,7 @@ module Equivalence_for_blocks = struct
   module T = struct
     type t = Cfg.block
 
-    let compare = Equivalence_comparisons.For_cfg.compare_block
+    let compare = Types.From_cfg.compare_block
 
     let sexp_of_t _t = Sexp.Atom "<block>"
   end
@@ -167,7 +161,7 @@ end
 type t = {
   instruction_equivalences : Equivalence_for_instructions.t;
   symbolic_block_equivalences : (Symbolic_block.t, Equivalence.t) Hashtbl.t;
-  frequency : (Equivalence.t, int) Hashtbl.t;
+  frequency : (Equivalence.t, int) Hashtbl.t; (* TODO: change to array.*)
 }
 
 let empty () =
@@ -244,4 +238,11 @@ let equivalences_by_frequency t =
   Hashtbl.to_alist t.frequency
   |> List.sort ~compare:(fun (_e1, f1) (_e2, f2) -> -Int.compare f1 f2)
   |> List.map ~f:fst
+;;
+
+let print_load t =
+  sprintf "Symbolic_blocks: %d; Instructions: %d %d"
+    (Hashtbl.length t.symbolic_block_equivalences)
+    (Hashtbl.length t.instruction_equivalences.for_terminator)
+    (Hashtbl.length t.instruction_equivalences.for_basic)
 ;;
