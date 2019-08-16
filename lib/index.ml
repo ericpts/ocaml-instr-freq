@@ -2,6 +2,15 @@ open Core
 open Ocamlcfg
 module Equivalence = Int
 
+let get_id_or_add hashtbl key =
+  match Hashtbl.find hashtbl key with
+  | Some id -> id
+  | None ->
+      let next_id = Hashtbl.length hashtbl in
+      Hashtbl.set hashtbl ~key ~data:next_id;
+      next_id
+;;
+
 module Equivalence_for_instructions = struct
   module For_basic = struct
     module T = struct
@@ -59,32 +68,32 @@ module Equivalence_for_instructions = struct
     }
   ;;
 
-  let next_id t =
-    Hashtbl.length t.for_basic + Hashtbl.length t.for_terminator + 1
-  ;;
-
   let get_id_for_basic (t : t) (instruction : Cfg.basic Cfg.instruction) =
-    match Hashtbl.find t.for_basic instruction with
-    | Some id -> id
-    | None ->
-        let id = next_id t in
-        Hashtbl.set t.for_basic ~key:instruction ~data:id;
-        id
+    get_id_or_add t.for_basic instruction
   ;;
 
   let get_id_for_terminator (t : t)
       (instruction : Cfg.terminator Cfg.instruction) =
-    match Hashtbl.find t.for_terminator instruction with
-    | Some id -> id
-    | None ->
-        let id = next_id t in
-        Hashtbl.set t.for_terminator ~key:instruction ~data:id;
-        id
+    get_id_or_add t.for_terminator instruction
   ;;
 
-  let get_id_for_basic_opt (t : t) = Hashtbl.find t.for_basic
+  let get_id_for_basic_exn (t : t) = Hashtbl.find_exn t.for_basic
 
-  let get_id_for_terminator_opt (t : t) = Hashtbl.find t.for_terminator
+  let get_id_for_terminator_exn (t : t) = Hashtbl.find_exn t.for_terminator
+
+  let inverted t =
+    let for_one hashtbl =
+      printf "for_one\n%!";
+      Hashtbl.to_alist hashtbl
+      |> List.sort ~compare:(fun (_, e1) (_, e2) -> Int.compare e1 e2)
+      |> List.mapi ~f:(fun i (instr, e) ->
+             printf "%d = %d\n" i e;
+             assert (i = e);
+             instr)
+      |> Array.of_list
+    in
+    (for_one t.for_basic, for_one t.for_terminator)
+  ;;
 end
 
 (* The symbolic block can be thought of as a representative for an
@@ -95,41 +104,36 @@ module Symbolic_block = struct
     (* This contains the unique id of every instruction *)
     type t = Equivalence.t array
 
-    let of_block (b : Cfg.block)
-        (instruction_equivalences : Equivalence_for_instructions.t) =
-      let ids_for_body_reversed =
-        List.fold b.body ~init:[] ~f:(fun acc cur ->
-            let id =
-              Equivalence_for_instructions.get_id_for_basic
-                instruction_equivalences cur
-            in
-            id :: acc)
-      in
-      let id_for_terminator =
-        Equivalence_for_instructions.get_id_for_terminator
-          instruction_equivalences b.terminator
-      in
-      id_for_terminator :: ids_for_body_reversed |> Array.of_list_rev
+    let of_block_generic (b : Cfg.block) ~get_id_for_basic
+        ~get_id_for_terminator =
+      let block_length = 1 + List.length b.body in
+      let ret = Array.create ~len:block_length 0 in
+      List.iteri b.body ~f:(fun i basic ->
+          ret.(i) <- get_id_for_basic basic);
+      ret.(block_length - 1) <- get_id_for_terminator b.terminator;
+      ret
     ;;
 
-    let of_block_opt (b : Cfg.block)
+    let of_block (b : Cfg.block)
         (instruction_equivalences : Equivalence_for_instructions.t) =
-      let open Option.Let_syntax in
-      let%bind for_body_rev =
-        List.map b.body
-          ~f:
-            (Equivalence_for_instructions.get_id_for_basic_opt
-               instruction_equivalences)
-        |> List.fold ~init:(Some []) ~f:(fun acc cur ->
-               let%bind acc = acc in
-               let%map cur = cur in
-               cur :: acc)
-      in
-      let%map for_terminator =
-        Equivalence_for_instructions.get_id_for_terminator_opt
-          instruction_equivalences b.terminator
-      in
-      for_terminator :: for_body_rev |> Array.of_list_rev
+      of_block_generic b
+        ~get_id_for_basic:
+          (Equivalence_for_instructions.get_id_for_basic
+             instruction_equivalences)
+        ~get_id_for_terminator:
+          (Equivalence_for_instructions.get_id_for_terminator
+             instruction_equivalences)
+    ;;
+
+    let of_block_exn (b : Cfg.block)
+        (instruction_equivalences : Equivalence_for_instructions.t) =
+      of_block_generic b
+        ~get_id_for_basic:
+          (Equivalence_for_instructions.get_id_for_basic_exn
+             instruction_equivalences)
+        ~get_id_for_terminator:
+          (Equivalence_for_instructions.get_id_for_terminator_exn
+             instruction_equivalences)
     ;;
 
     let compare = [%compare: int array]
@@ -167,40 +171,50 @@ let update t (block : Cfg.block) =
   let symbolic_block =
     Symbolic_block.of_block block t.instruction_equivalences
   in
-  Hashtbl.update t.symbolic_block_equivalences symbolic_block ~f:(function
-    | Some x -> x
-    | None -> Hashtbl.length t.symbolic_block_equivalences + 1);
   let equivalence =
-    Hashtbl.find_exn t.symbolic_block_equivalences symbolic_block
+    get_id_or_add t.symbolic_block_equivalences symbolic_block
   in
   if equivalence >= Array.length t.frequency then (
+    assert (
+      Hashtbl.length t.symbolic_block_equivalences
+      = Array.length t.frequency + 1 );
     let new_frequency =
       Array.create ~len:(Array.length t.frequency * 2) 0
     in
     Array.iteri t.frequency ~f:(fun i x -> new_frequency.(i) <- x);
+    for i = 0 to Array.length t.frequency - 1 do
+      assert (new_frequency.(i) >= 1)
+    done;
     t.frequency <- new_frequency );
 
   t.frequency.(equivalence) <- t.frequency.(equivalence) + 1
 ;;
 
-let frequency t equivalence =
-  if equivalence < Array.length t.frequency then
-    Some t.frequency.(equivalence)
-  else None
-;;
+let frequency_exn t equivalence = t.frequency.(equivalence)
 
-let equivalence t (block : Cfg.block) : Equivalence.t option =
-  let open Option.Let_syntax in
-  let%bind symbolic_block =
-    Symbolic_block.of_block_opt block t.instruction_equivalences
+let equivalence_exn t (block : Cfg.block) : Equivalence.t =
+  let symbolic_block =
+    Symbolic_block.of_block_exn block t.instruction_equivalences
   in
-  Hashtbl.find t.symbolic_block_equivalences symbolic_block
+  Hashtbl.find_exn t.symbolic_block_equivalences symbolic_block
 ;;
 
 let to_file t ~filename =
   (* We cannot directly marshal the hash tables themselves, as they contain
      closures. *)
   let as_alist =
+    (* Sanity check, that we did not somehow end up with a discontinuous
+       frequency array. *)
+    let n_classes = Hashtbl.length t.symbolic_block_equivalences in
+    for i = 0 to n_classes - 1 do
+      assert (t.frequency.(i) >= 1)
+    done;
+
+    for i = n_classes to Array.length t.frequency - 1 do
+      assert (t.frequency.(i) = 0)
+    done;
+    Array.unsafe_truncate t.frequency ~len:n_classes;
+
     ( Hashtbl.to_alist t.instruction_equivalences.for_basic,
       Hashtbl.to_alist t.instruction_equivalences.for_terminator,
       Hashtbl.to_alist t.symbolic_block_equivalences,
@@ -235,11 +249,22 @@ let of_file ~filename =
       })
 ;;
 
-let equivalences_by_frequency t =
-  let with_indices = Array.mapi t.frequency ~f:(fun i f -> (f, i)) in
-  Array.sort with_indices ~compare:(fun (f1, _e1) (f2, _e2) ->
-      -Int.compare f1 f2);
-  Array.map with_indices ~f:fst |> Array.to_list
+let filter_and_sort_equivalences t ~min_block_size =
+  List.zip_exn
+    (Array.to_list t.frequency)
+    (Hashtbl.to_alist t.symbolic_block_equivalences)
+  |> List.filter_map ~f:(fun (frequency, (symbolic_block, equivalence)) ->
+         if Array.length symbolic_block >= min_block_size then
+           Some
+             (`frequency frequency, symbolic_block, `equivalence equivalence)
+         else None)
+  |> List.sort ~compare:(fun (`frequency f1, _, _) (`frequency f2, _, _) ->
+         -Int.compare f1 f2)
+;;
+
+let equivalences_by_frequency t ~min_block_size =
+  filter_and_sort_equivalences t ~min_block_size
+  |> List.map ~f:(fun (_, _, `equivalence e) -> e)
 ;;
 
 let print_load t =
@@ -247,4 +272,26 @@ let print_load t =
     (Hashtbl.length t.symbolic_block_equivalences)
     (Hashtbl.length t.instruction_equivalences.for_basic)
     (Hashtbl.length t.instruction_equivalences.for_terminator)
+;;
+
+let print_most_frequent t ~min_block_size ~n_most_frequent_equivalences =
+  let filtered =
+    List.take
+      (filter_and_sort_equivalences t ~min_block_size)
+      n_most_frequent_equivalences
+  in
+  let inverted_basic, inverted_terminator =
+    Equivalence_for_instructions.inverted t.instruction_equivalences
+  in
+  let invert_symbolic_block (s : Symbolic_block.t) =
+    let block_length = Array.length s in
+    let body =
+      List.init (block_length - 1) ~f:(fun i -> inverted_basic.(i))
+    in
+    let terminator = inverted_terminator.(s.(block_length - 1)) in
+    { Cfg.start = -1; body; terminator; predecessors = Cfg.LabelSet.empty }
+  in
+  List.iter filtered ~f:(fun (`frequency f, s, `equivalence e) ->
+      printf "Equivalence class %d with frequency %d: \n" e f;
+      Utils.print_block (invert_symbolic_block s) ~block_print_mode:`As_cfg)
 ;;

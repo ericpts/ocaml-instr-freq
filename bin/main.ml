@@ -22,7 +22,7 @@ let eprintf_progress fmt =
     fmt
 ;;
 
-let blocks_of_file (file : Filename.t) =
+let with_blocks_of_file (file : Filename.t) ~(f : Cfg.block -> unit) =
   let open Linear_format in
   let items = restore file in
   let functions =
@@ -35,10 +35,13 @@ let blocks_of_file (file : Filename.t) =
             |> Some
         | Data _ -> None)
   in
-  List.concat_map functions ~f:(fun cfg_builder ->
+  List.iter functions ~f:(fun cfg_builder ->
       let layout = Cfg_builder.get_layout cfg_builder in
-      List.map layout ~f:(fun label ->
-          Cfg_builder.get_block cfg_builder label |> Option.value_exn))
+      List.iter layout ~f:(fun label ->
+          let block =
+            Cfg_builder.get_block cfg_builder label |> Option.value_exn
+          in
+          f block))
 ;;
 
 let build_index files ~(index_file : Filename.t) =
@@ -48,19 +51,17 @@ let build_index files ~(index_file : Filename.t) =
   List.iteri files ~f:(fun ifile file ->
       eprintf_progress "Processing file %d/%d; Index load: %s \r" ifile
         total_number_of_files (Index.print_load index);
-
-      List.iter (blocks_of_file file) ~f:(fun block ->
-          Index.update index block));
+      with_blocks_of_file file ~f:(fun block -> Index.update index block));
   let () = Index.to_file index ~filename:index_file in
-  printf "Saved index to %s\n" index_file;
+  printf "\nSaved index to %s\n%!" index_file;
   index
 ;;
 
 let print_most_popular_classes index ~n_most_frequent_equivalences
-    ~max_representatives_per_equivalence ~block_print_mode =
+    ~max_representatives_per_equivalence ~block_print_mode ~min_block_size =
   let equivalences_to_print =
     List.take
-      (Index.equivalences_by_frequency index)
+      (Index.equivalences_by_frequency index ~min_block_size)
       n_most_frequent_equivalences
     |> Set.of_list (module Index.Equivalence)
   in
@@ -79,8 +80,11 @@ let print_most_popular_classes index ~n_most_frequent_equivalences
           current_printed < max_representatives_per_equivalence
         in
         if can_print then (
-          printf "Equivalence with %d members: \n" frequency;
-          Utils.print_block block ~block_print_mode );
+          printf "Equivalence %d with %d members: \n"
+            (Index.Equivalence.to_int equivalence)
+            frequency;
+          Utils.print_block block ~block_print_mode;
+          printf "%!" );
         Hashtbl.set how_many_printed_for_equivalence ~key:equivalence
           ~data:(if can_print then current_printed + 1 else current_printed)
   in
@@ -110,16 +114,21 @@ let main files ~index_file ~max_representatives_per_equivalence
     ~min_equivalence_class_size =
   let index =
     if Sys.file_exists_exn index_file then (
-      printf "Using cached index from %s\n%!" index_file;
-      Index.of_file ~filename:index_file )
+      printf "Loading cached index from %s...%!" index_file;
+      let index = Index.of_file ~filename:index_file in
+      printf " loaded!\n%!";
+      index )
     else build_index files ~index_file
   in
+  Index.print_most_frequent index ~min_block_size
+    ~n_most_frequent_equivalences;
+
   let on_block, on_finish_iteration =
     let on_blocks, on_finish_iterations =
       List.unzip
         [ print_most_popular_classes index
             ~max_representatives_per_equivalence
-            ~n_most_frequent_equivalences ~block_print_mode;
+            ~n_most_frequent_equivalences ~block_print_mode ~min_block_size;
           count_equivalence_classes_of_each_size ()
         ]
     in
@@ -132,14 +141,10 @@ let main files ~index_file ~max_representatives_per_equivalence
     (on_block, on_finish_iteration)
   in
   List.iter files ~f:(fun file ->
-      List.iter (blocks_of_file file) ~f:(fun block ->
+      with_blocks_of_file file ~f:(fun block ->
           if List.length block.body + 1 >= min_block_size then
-            let equivalence =
-              Index.equivalence index block |> Option.value_exn
-            in
-            let frequency =
-              Index.frequency index equivalence |> Option.value_exn
-            in
+            let equivalence = Index.equivalence_exn index block in
+            let frequency = Index.frequency_exn index equivalence in
             if frequency >= min_equivalence_class_size then
               on_block block equivalence frequency));
   on_finish_iteration ()
