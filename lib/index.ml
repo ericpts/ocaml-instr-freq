@@ -61,6 +61,9 @@ module Equivalence_for_instructions = struct
 
   let empty () =
     {
+      (* CR gretay for ericpts: any particular reasons for choosing the
+         defaults here? growth_allowed is true by default. The default size
+         is 128, which is nice and round, unlike 100 :) *)
       for_basic =
         Hashtbl.create ~size:2_000 ~growth_allowed:true (module For_basic);
       for_terminator =
@@ -85,7 +88,13 @@ module Equivalence_for_instructions = struct
     let for_one hashtbl =
       printf "for_one\n%!";
       Hashtbl.to_alist hashtbl
-      |> List.sort ~compare:(fun (_, e1) (_, e2) -> Int.compare e1 e2)
+      (* CR gyorsh for ericpts: why do you need to sort? can't you use ids
+         for indexes into the array directly? if you must sort, can you
+         first put them in the array and then sort? it's more memory
+         efficient: Array.sort is const, and List.sort is n + log n,
+         although they aren't big. *)
+      |> List.sort ~compare:(fun (_, e1) (_, e2) ->
+             Equivalence.compare e1 e2)
       |> List.mapi ~f:(fun i (instr, e) ->
              printf "%d = %d\n" i e;
              assert (i = e);
@@ -178,6 +187,8 @@ let update t (block : Cfg.block) =
     assert (
       Hashtbl.length t.symbolic_block_equivalences
       = Array.length t.frequency + 1 );
+
+    (* CR gyorsh for ericpts: Array.init would do it in one pass *)
     let new_frequency =
       Array.create ~len:(Array.length t.frequency * 2) 0
     in
@@ -200,8 +211,8 @@ let equivalence_exn t (block : Cfg.block) : Equivalence.t =
 ;;
 
 let to_file t ~filename =
-  (* We cannot directly marshal the hash tables themselves, as they contain
-     closures. *)
+  (* We cannot directly marshal Core's hash tables themselves, as they
+     contain closures. *)
   let as_alist =
     (* Sanity check, that we did not somehow end up with a discontinuous
        frequency array. *)
@@ -249,6 +260,15 @@ let of_file ~filename =
       })
 ;;
 
+(* CR gyorsh for ericpts: does Hashtbl.to_alist guarantee that the order of
+   pairs in the resulting list is the order of keys? also, wouldn't to_alist
+   allocate a huge new list? Another option is to iterate over the hashtable
+   and then use random access into the frequency array.
+
+   Array.length symbolic_block breaks the abstraction of how symbolic blocks
+   are represented.
+
+   why do you use backticks and not records or named arguments? *)
 let filter_and_sort_equivalences t ~min_block_size =
   List.zip_exn
     (Array.to_list t.frequency)

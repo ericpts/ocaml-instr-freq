@@ -24,15 +24,12 @@ let eprintf_progress fmt =
 
 let with_blocks_of_file (file : Filename.t) ~(f : Cfg.block -> unit) =
   let open Linear_format in
-  let items = restore file in
+  let ui, _ = restore file in
   let functions =
-    List.filter_map items ~f:(fun item ->
-        restore_item item;
+    List.filter_map ui.items ~f:(fun item ->
         match item with
-        | Func d ->
-            d.decl
-            |> Cfg_builder.from_linear ~preserve_orig_labels:false
-            |> Some
+        | Func f ->
+            Some (Cfg_builder.from_linear f ~preserve_orig_labels:false)
         | Data _ -> None)
   in
   List.iter functions ~f:(fun cfg_builder ->
@@ -79,6 +76,10 @@ let print_most_popular_classes index ~n_most_frequent_equivalences
         let can_print =
           current_printed < max_representatives_per_equivalence
         in
+        (* CR gyorsh for ericpts: can you finish iteration earlier here?
+           just remove from equivalences_to_print when current_printed
+           reaches max? I bet it will finish after scanning just a few of
+           the linear files. *)
         if can_print then (
           printf "Equivalence %d with %d members: \n"
             (Index.Equivalence.to_int equivalence)
@@ -123,13 +124,19 @@ let main files ~index_file ~max_representatives_per_equivalence
   Index.print_most_frequent index ~min_block_size
     ~n_most_frequent_equivalences;
 
+  (* CR gyorsh for : this is a nice way to add different patterns; consider
+     separating it out a bit more and explosing a type for functions that
+     return a pair of on_block and on_finish_iterations. What are the
+     restrictions? e.g., does order they are listed in matter / do they have
+     to preserve index? *)
   let on_block, on_finish_iteration =
     let on_blocks, on_finish_iterations =
       List.unzip
-        [ print_most_popular_classes index
+        [
+          print_most_popular_classes index
             ~max_representatives_per_equivalence
             ~n_most_frequent_equivalences ~block_print_mode ~min_block_size;
-          count_equivalence_classes_of_each_size ()
+          count_equivalence_classes_of_each_size ();
         ]
     in
     let on_block block equivalence frequency =

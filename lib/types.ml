@@ -10,6 +10,7 @@ let chain_compare list =
     ~finish:Fn.id
 ;;
 
+(* CR gyorsh for ericpts: Where is it used? I haven't reviewed it. *)
 module Modulo_register_renaming = struct
   exception Registers_differ of int
 
@@ -76,6 +77,9 @@ module From_cmm = struct
   [@@deriving compare, sexp_of, hash]
 end
 
+(* CR gyorsh for ericpts: Arch.addressing_mode & co won't build when the
+   compile is configured for other targets. It's okay for our purposes, but
+   you need to state the limitation somewhere earlier. *)
 module From_arch = struct
   type addressing_mode = Arch.addressing_mode =
     | Ibased of string * int
@@ -175,6 +179,20 @@ module From_ident = struct
   let hash_fold_t state t = String.hash_fold_t state (Ident.name t)
 end
 
+(* CR gyorsh for ericpts: @compare.ignore
+
+   addressing_mode should not be ignored. Compare because different variants
+   result in different assembly instructions (or operand format), but the
+   specific int offsets inside it can be ignored for now.
+
+   The contents of Name_for_debugger need to be ignored.
+
+   spacetime_index and Checkbound.immediate can be ignored.
+
+   The second component of successor represents the label of the successor
+   block, so it should also be ignored, but not the condition. Length of the
+   successor array shouldn't be ignored. Similarly, switch terminator
+   ideally should compare the length of the array. *)
 module From_cfg = struct
   type operation = Cfg.operation =
     | Move
@@ -267,13 +285,24 @@ module From_cfg = struct
     | Tailcall of func_call_operation
   [@@deriving compare, sexp_of, hash]
 
+  (* CR gyorsh for ericpts: I think I confused you about it earlier. We do
+     need to check that i1.arg and i1.res use the same variant of Reg.loc as
+     the corresponding entries in i2. Location can be either Register or
+     Stack, in which case a memory indexing operand is emitted that refers
+     to a precomputed stack offset. We don't care what the offset is, but we
+     do care whether the operand is in a register or on the stack, which is
+     often a different instruction encoding so we may. I don't think we need
+     to check Proc.register_class for amd64 backend, because there are only
+     2 (float and everything else), and float is only used in special float
+     instructions. *)
   let compare_instruction (i1 : 'a Cfg.instruction)
       (i2 : 'a Cfg.instruction) ~(compare_underlying : 'a -> 'a -> int) :
       int =
     chain_compare
-      [ lazy (compare_underlying i1.desc i2.desc);
+      [
+        lazy (compare_underlying i1.desc i2.desc);
         lazy (Int.compare (Array.length i1.arg) (Array.length i2.arg));
-        lazy (Int.compare (Array.length i1.res) (Array.length i2.res))
+        lazy (Int.compare (Array.length i1.res) (Array.length i2.res));
       ]
   ;;
 

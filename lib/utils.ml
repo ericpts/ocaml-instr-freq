@@ -43,6 +43,10 @@ let emit_assembly (block : Cfg.block) =
       fun_fast = false;
       fun_dbg = Debuginfo.none;
       fun_spacetime_shape = None;
+      fun_num_stack_slots = Caml.Array.make Proc.num_register_classes 0;
+      fun_frame_required = false;
+      fun_prologue_required = false;
+      fun_contains_calls = false;
     }
   in
   X86_proc.reset_asm_code ();

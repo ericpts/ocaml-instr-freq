@@ -1,6 +1,9 @@
 open! Core
 open Ocamlcfg
 
+(* Index is a collection of equivalence classes *)
+
+(* Equivalence.t represents an equivalence class (not the entire relation) *)
 module Equivalence : sig
   type t [@@deriving compare, hash, sexp]
 
@@ -26,6 +29,7 @@ val of_file : filename:Filename.t -> t
 val equivalences_by_frequency :
   t -> min_block_size:int -> Equivalence.t list
 
+(* CR gyorsh for ericpts: what does "load" mean here? *)
 val print_load : t -> string
 
 val print_most_frequent :
