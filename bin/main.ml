@@ -22,6 +22,8 @@ let eprintf_progress fmt =
     fmt
 ;;
 
+exception Stop_iteration
+
 let with_blocks_of_file (file : Filename.t) ~(f : Cfg.block -> unit) =
   let open Linear_format in
   let ui, _ = restore file in
@@ -54,62 +56,6 @@ let build_index files ~(index_file : Filename.t) =
   index
 ;;
 
-let print_most_popular_classes index ~n_most_frequent_equivalences
-    ~max_representatives_per_equivalence ~block_print_mode ~min_block_size =
-  let equivalences_to_print =
-    List.take
-      (Index.equivalences_by_frequency index ~min_block_size)
-      n_most_frequent_equivalences
-    |> Set.of_list (module Index.Equivalence)
-  in
-  let how_many_printed_for_equivalence =
-    Hashtbl.create (module Index.Equivalence)
-  in
-  let on_block block equivalence frequency =
-    match Set.mem equivalences_to_print equivalence with
-    | false -> ()
-    | true ->
-        let current_printed =
-          Hashtbl.find how_many_printed_for_equivalence equivalence
-          |> Option.value ~default:0
-        in
-        let can_print =
-          current_printed < max_representatives_per_equivalence
-        in
-        (* CR gyorsh for ericpts: can you finish iteration earlier here?
-           just remove from equivalences_to_print when current_printed
-           reaches max? I bet it will finish after scanning just a few of
-           the linear files. *)
-        if can_print then (
-          printf "Equivalence %d with %d members: \n"
-            (Index.Equivalence.to_int equivalence)
-            frequency;
-          Utils.print_block block ~block_print_mode;
-          printf "%!" );
-        Hashtbl.set how_many_printed_for_equivalence ~key:equivalence
-          ~data:(if can_print then current_printed + 1 else current_printed)
-  in
-  let on_finish_iteration () = () in
-  (on_block, on_finish_iteration)
-;;
-
-let count_equivalence_classes_of_each_size () =
-  let equivalence_classes_of_each_size = Hashtbl.create (module Int) in
-  let on_block _block _equivalence frequency =
-    Hashtbl.update equivalence_classes_of_each_size frequency ~f:(function
-      | Some x -> x + 1
-      | None -> 1)
-  in
-  let on_finish_iteration () =
-    printf
-      !"(numbers of members in equivalence class, how many equivalence \
-        classes there are with this many members):\n\
-        %{sexp: (int, int) Hashtbl.t}\n"
-      equivalence_classes_of_each_size
-  in
-  (on_block, on_finish_iteration)
-;;
-
 let main files ~index_file ~max_representatives_per_equivalence
     ~n_most_frequent_equivalences ~block_print_mode ~min_block_size
     ~min_equivalence_class_size =
@@ -124,36 +70,31 @@ let main files ~index_file ~max_representatives_per_equivalence
   Index.print_most_frequent index ~min_block_size
     ~n_most_frequent_equivalences;
 
-  (* CR gyorsh for : this is a nice way to add different patterns; consider
+  (* XCR gyorsh for : this is a nice way to add different patterns; consider
      separating it out a bit more and explosing a type for functions that
      return a pair of on_block and on_finish_iterations. What are the
      restrictions? e.g., does order they are listed in matter / do they have
      to preserve index? *)
-  let on_block, on_finish_iteration =
-    let on_blocks, on_finish_iterations =
-      List.unzip
-        [
-          print_most_popular_classes index
-            ~max_representatives_per_equivalence
-            ~n_most_frequent_equivalences ~block_print_mode ~min_block_size;
-          count_equivalence_classes_of_each_size ();
-        ]
-    in
-    let on_block block equivalence frequency =
-      List.iter on_blocks ~f:(fun f -> f block equivalence frequency)
-    in
-    let on_finish_iteration () =
-      List.iter on_finish_iterations ~f:(fun f -> f ())
-    in
-    (on_block, on_finish_iteration)
+  let { Stats.on_block; on_finish_iteration } =
+    Stats.combine
+      [ Stats.print_most_popular_classes index
+          ~max_representatives_per_equivalence ~n_most_frequent_equivalences
+          ~block_print_mode ~min_block_size;
+        Stats.count_equivalence_classes_of_each_size ()
+      ]
   in
-  List.iter files ~f:(fun file ->
-      with_blocks_of_file file ~f:(fun block ->
-          if List.length block.body + 1 >= min_block_size then
-            let equivalence = Index.equivalence_exn index block in
-            let frequency = Index.frequency_exn index equivalence in
-            if frequency >= min_equivalence_class_size then
-              on_block block equivalence frequency));
+  ( try
+      List.iter files ~f:(fun file ->
+          with_blocks_of_file file ~f:(fun block ->
+              if List.length block.body + 1 >= min_block_size then
+                let equivalence = Index.equivalence_exn index block in
+                let frequency = Index.frequency_exn index equivalence in
+                if frequency >= min_equivalence_class_size then
+                  match on_block block ~equivalence ~frequency with
+                  | `Continue -> ()
+                  | `Stop -> raise Stop_iteration))
+    with Stop_iteration -> () );
+
   on_finish_iteration ()
 ;;
 
