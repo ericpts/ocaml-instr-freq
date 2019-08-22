@@ -4,7 +4,7 @@ open Ocamlcfg
 type t = {
   on_block :
     Cfg.block ->
-    equivalence:Index.Equivalence.t ->
+    equivalence:Index.Block_equivalence.t ->
     frequency:int ->
     [ `Stop | `Continue ];
   on_finish_iteration : unit -> unit;
@@ -36,7 +36,7 @@ let print_most_popular_classes index ~n_most_frequent_equivalences
   let remaining_to_print =
     match
       Hashtbl.create_mapped
-        (module Index.Equivalence)
+        (module Index.Block_equivalence)
         ~get_key:Fn.id
         ~get_data:(Fn.const max_representatives_per_equivalence)
         equivalences_to_print
@@ -45,7 +45,7 @@ let print_most_popular_classes index ~n_most_frequent_equivalences
     | `Duplicate_keys list ->
         failwithf
           !"Received unexpected duplicated equivalence indices: %{sexp: \
-            Index.Equivalence.t list} "
+            Index.Block_equivalence.t list} "
           list ()
   in
   let on_block block ~equivalence ~frequency =
@@ -57,7 +57,7 @@ let print_most_popular_classes index ~n_most_frequent_equivalences
            reaches max? I bet it will finish after scanning just a few of
            the linear files. *)
         printf "Equivalence %d with %d members: \n"
-          (Index.Equivalence.to_int equivalence)
+          (Index.Block_equivalence.to_int equivalence)
           frequency;
         Utils.print_block block ~block_print_mode;
         printf "%!";

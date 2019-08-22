@@ -49,7 +49,8 @@ let build_index files ~(index_file : Filename.t) =
   let index = Index.empty () in
   List.iteri files ~f:(fun ifile file ->
       eprintf_progress "Processing file %d/%d; Index load: %s \r" ifile
-        total_number_of_files (Index.print_load index);
+        total_number_of_files
+        (Index.print_hashtbl_load_statistics index);
       with_blocks_of_file file ~f:(fun block -> Index.update index block));
   let () = Index.to_file index ~filename:index_file in
   printf "\nSaved index to %s\n%!" index_file;
@@ -121,7 +122,8 @@ let main_command =
           (optional_with_default 5 int)
           ~doc:
             "n Only report equivalence classes, for which the \
-             representative block has at least [n] instructions."
+             representative block has at least [n] instructions (including \
+             the terminator)."
       and min_equivalence_class_size =
         flag "-min-equivalence-class-size"
           (optional_with_default 5 int)

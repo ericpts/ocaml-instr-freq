@@ -10,49 +10,23 @@ let chain_compare list =
     ~finish:Fn.id
 ;;
 
-(* CR gyorsh for ericpts: Where is it used? I haven't reviewed it. *)
+(* XCR gyorsh for ericpts: Where is it used? I haven't reviewed it. Deleted
+   the unused code; now it is used in compare_instruction. *)
 module Modulo_register_renaming = struct
-  exception Registers_differ of int
-
-  let compare_exn (b1 : Cfg.block) (b2 : Cfg.block) : int =
-    let get_reg (b : Cfg.block) =
-      let terminator_registers =
-        Array.append b.terminator.res b.terminator.arg |> Array.to_list
-      in
-      let body_registers =
-        List.map b.body ~f:(fun desc ->
-            Array.append desc.arg desc.res |> Array.to_list)
-      in
-      let all_registers = body_registers @ [ terminator_registers ] in
-      List.map all_registers
-        ~f:
-          (List.map ~f:(fun reg ->
-               match reg.Reg.loc with
-               | Reg.Unknown -> "unkown"
-               | Reg.Reg num -> sprintf "reg#%d" num
-               | Stack location -> (
-                   match location with
-                   | Local x -> sprintf "stack#local#%d" x
-                   | Incoming x -> sprintf "stack#incoming#%d" x
-                   | Outgoing x -> sprintf "stack#outgoing#%d" x )))
+  let symbolize_register (reg : Reg.t) ~(include_index_offset : bool) =
+    let maybe_add_index base index =
+      match include_index_offset with
+      | true -> sprintf "%s#%d" base index
+      | false -> base
     in
-    let renaming_map = Hashtbl.create (module String) in
-    try
-      List.iter2_exn (get_reg b1) (get_reg b2) ~f:(fun r1 r2 ->
-          let len_r1 = List.length r1 in
-          let len_r2 = List.length r2 in
-          if len_r1 <> len_r2 then
-            raise (Registers_differ (Int.compare len_r1 len_r2));
-
-          List.iter2_exn r1 r2 ~f:(fun s1 s2 ->
-              Hashtbl.update renaming_map s1 ~f:(function
-                | Some s1_in_b2 ->
-                    if s1_in_b2 <> s2 then
-                      raise (Registers_differ (String.compare s1_in_b2 s2));
-                    s2
-                | None -> s2)));
-      0
-    with Registers_differ cmp -> cmp
+    match reg.Reg.loc with
+    | Reg.Unknown -> "unknown"
+    | Reg.Reg num -> maybe_add_index "reg" num
+    | Stack location -> (
+        match location with
+        | Local x -> maybe_add_index "stack#local" x
+        | Incoming x -> maybe_add_index "stack#incoming" x
+        | Outgoing x -> maybe_add_index "stack#outgoing" x )
   ;;
 end
 
@@ -77,16 +51,18 @@ module From_cmm = struct
   [@@deriving compare, sexp_of, hash]
 end
 
-(* CR gyorsh for ericpts: Arch.addressing_mode & co won't build when the
+(* XCR gyorsh for ericpts: Arch.addressing_mode & co won't build when the
    compile is configured for other targets. It's okay for our purposes, but
-   you need to state the limitation somewhere earlier. *)
+   you need to state the limitation somewhere earlier.
+
+   ericpts: Solved in the readme. *)
 module From_arch = struct
   type addressing_mode = Arch.addressing_mode =
-    | Ibased of string * int
-    | Iindexed of int
-    | Iindexed2 of int
-    | Iscaled of int * int
-    | Iindexed2scaled of int * int
+    | Ibased of (string[@compare.ignore]) * (int[@compare.ignore])
+    | Iindexed of (int[@compare.ignore])
+    | Iindexed2 of (int[@compare.ignore])
+    | Iscaled of (int[@compare.ignore]) * (int[@compare.ignore])
+    | Iindexed2scaled of (int[@compare.ignore]) * (int[@compare.ignore])
   [@@deriving compare, sexp_of, hash]
 
   type float_operation = Arch.float_operation =
@@ -179,7 +155,7 @@ module From_ident = struct
   let hash_fold_t state t = String.hash_fold_t state (Ident.name t)
 end
 
-(* CR gyorsh for ericpts: @compare.ignore
+(* XCR gyorsh for ericpts: @compare.ignore
 
    addressing_mode should not be ignored. Compare because different variants
    result in different assembly instructions (or operand format), but the
@@ -202,12 +178,8 @@ module From_cfg = struct
     | Const_float of (int64[@compare.ignore])
     | Const_symbol of (string[@compare.ignore])
     | Stackoffset of int
-    | Load of
-        From_cmm.memory_chunk * (From_arch.addressing_mode[@compare.ignore])
-    | Store of
-        From_cmm.memory_chunk
-        * (From_arch.addressing_mode[@compare.ignore])
-        * bool
+    | Load of From_cmm.memory_chunk * From_arch.addressing_mode
+    | Store of From_cmm.memory_chunk * From_arch.addressing_mode * bool
     | Intop of From_mach.integer_operation
     | Intop_imm of From_mach.integer_operation * (int[@compare.ignore])
     | Negf
@@ -224,7 +196,7 @@ module From_cfg = struct
         which_parameter : int option;
         provenance : unit option;
         is_assignment : bool;
-      }
+      } [@compare.ignore]
   [@@deriving compare, sexp_of, hash]
 
   type func_call_operation = Cfg.func_call_operation =
@@ -244,12 +216,12 @@ module From_cfg = struct
     | Alloc of {
         bytes : int;
         label_after_call_gc : int option; [@compare.ignore]
-        spacetime_index : int;
+        spacetime_index : int; [@compare.ignore]
       }
     | Checkbound of {
-        immediate : int option;
+        immediate : int option; [@compare.ignore]
         label_after_error : int option; [@compare.ignore]
-        spacetime_index : int;
+        spacetime_index : int; [@compare.ignore]
       }
   [@@deriving compare, sexp_of, hash]
 
@@ -273,19 +245,30 @@ module From_cfg = struct
     | Test of From_mach.test
   [@@deriving compare, sexp_of, hash]
 
-  type successor = condition * int [@@deriving compare, sexp_of, hash]
+  type successor = condition * (int[@compare.ignore])
+  [@@deriving compare, sexp_of, hash]
 
   let hash_fold_array f state array = Array.fold array ~init:state ~f
 
+  type switch_array = int array [@@deriving sexp_of]
+
+  let compare_switch_array arr1 arr2 =
+    Int.compare (Array.length arr1) (Array.length arr2)
+  ;;
+
+  let hash_fold_switch_array state array =
+    Int.hash_fold_t state (Array.length array)
+  ;;
+
   type terminator = Cfg.terminator =
-    | Branch of (successor list[@compare.ignore])
-    | Switch of (int array[@compare.ignore])
+    | Branch of successor list
+    | Switch of switch_array
     | Return
     | Raise of From_cmm.raise_kind
     | Tailcall of func_call_operation
   [@@deriving compare, sexp_of, hash]
 
-  (* CR gyorsh for ericpts: I think I confused you about it earlier. We do
+  (* XCR gyorsh for ericpts: I think I confused you about it earlier. We do
      need to check that i1.arg and i1.res use the same variant of Reg.loc as
      the corresponding entries in i2. Location can be either Register or
      Stack, in which case a memory indexing operand is emitted that refers
@@ -298,11 +281,19 @@ module From_cfg = struct
   let compare_instruction (i1 : 'a Cfg.instruction)
       (i2 : 'a Cfg.instruction) ~(compare_underlying : 'a -> 'a -> int) :
       int =
+    let compare_reg_arrays arr1 arr2 =
+      let symbolize =
+        Modulo_register_renaming.symbolize_register
+          ~include_index_offset:false
+      in
+      Array.compare String.compare
+        (Array.map arr1 ~f:symbolize)
+        (Array.map arr2 ~f:symbolize)
+    in
     chain_compare
-      [
-        lazy (compare_underlying i1.desc i2.desc);
-        lazy (Int.compare (Array.length i1.arg) (Array.length i2.arg));
-        lazy (Int.compare (Array.length i1.res) (Array.length i2.res));
+      [ lazy (compare_underlying i1.desc i2.desc);
+        lazy (compare_reg_arrays i1.arg i2.arg);
+        lazy (compare_reg_arrays i1.res i2.res)
       ]
   ;;
 

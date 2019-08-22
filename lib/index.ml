@@ -1,33 +1,50 @@
 open Core
 open Ocamlcfg
-module Equivalence = Int
 
-let get_id_or_add hashtbl key =
+module type Equivalence = sig
+  type t [@@deriving compare, hash, sexp]
+
+  val to_int : t -> int
+
+  val of_int : int -> t
+end
+
+module Block_equivalence : sig
+  type t
+
+  include Equivalence with type t := t
+end =
+  Int
+
+module Basic_instruction_equivalence : sig
+  type t
+
+  include Equivalence with type t := t
+end =
+  Int
+
+module Terminator_instruction_equivalence : sig
+  type t
+
+  include Equivalence with type t := t
+end =
+  Int
+
+let get_id_or_add ~equivalence_of_int hashtbl key =
   match Hashtbl.find hashtbl key with
   | Some id -> id
   | None ->
-      let next_id = Hashtbl.length hashtbl in
+      let next_id = Hashtbl.length hashtbl |> equivalence_of_int in
       Hashtbl.set hashtbl ~key ~data:next_id;
       next_id
 ;;
 
-module Equivalence_for_instructions = struct
+module Instruction_index = struct
   module For_basic = struct
     module T = struct
       type t = Cfg.basic Cfg.instruction
 
-      let compare =
-        (* CR estavarache: Maybe there should be a more thorough register
-           comparison?
-
-           In the sense that perhaps two blocks are not equivalent in the
-           register-renaming sense, however if we hash the instructions
-           one-by-one, then they would become equivalent.
-
-           One solution to this would be to first do register-renaming, and
-           then only after that to hash the instructions. *)
-        Types.From_cfg.compare_basic_instruction
-      ;;
+      let compare = Types.From_cfg.compare_basic_instruction
 
       let sexp_of_t (t : t) = Types.From_cfg.sexp_of_basic t.desc
 
@@ -54,30 +71,39 @@ module Equivalence_for_instructions = struct
   end
 
   type t = {
-    for_basic : (Cfg.basic Cfg.instruction, Equivalence.t) Hashtbl.t;
+    for_basic :
+      (Cfg.basic Cfg.instruction, Basic_instruction_equivalence.t) Hashtbl.t;
     for_terminator :
-      (Cfg.terminator Cfg.instruction, Equivalence.t) Hashtbl.t;
+      ( Cfg.terminator Cfg.instruction,
+        Terminator_instruction_equivalence.t )
+      Hashtbl.t;
   }
 
   let empty () =
     {
-      (* CR gretay for ericpts: any particular reasons for choosing the
+      (* XCR gretay for ericpts: any particular reasons for choosing the
          defaults here? growth_allowed is true by default. The default size
-         is 128, which is nice and round, unlike 100 :) *)
-      for_basic =
-        Hashtbl.create ~size:2_000 ~growth_allowed:true (module For_basic);
-      for_terminator =
-        Hashtbl.create ~size:100 ~growth_allowed:true (module For_terminator);
+         is 128, which is nice and round, unlike 100 :)
+
+         ericpts: Empirically, this is how many values I found while playing
+         around with the code, so I was hoping to avoid some allocations and
+         copeies; however I think it does not make a big difference, so I'll
+         just stick to the clear version. *)
+      for_basic = Hashtbl.create (module For_basic);
+      for_terminator = Hashtbl.create (module For_terminator);
     }
   ;;
 
   let get_id_for_basic (t : t) (instruction : Cfg.basic Cfg.instruction) =
-    get_id_or_add t.for_basic instruction
+    get_id_or_add ~equivalence_of_int:Basic_instruction_equivalence.of_int
+      t.for_basic instruction
   ;;
 
   let get_id_for_terminator (t : t)
       (instruction : Cfg.terminator Cfg.instruction) =
-    get_id_or_add t.for_terminator instruction
+    get_id_or_add
+      ~equivalence_of_int:Terminator_instruction_equivalence.of_int
+      t.for_terminator instruction
   ;;
 
   let get_id_for_basic_exn (t : t) = Hashtbl.find_exn t.for_basic
@@ -85,23 +111,27 @@ module Equivalence_for_instructions = struct
   let get_id_for_terminator_exn (t : t) = Hashtbl.find_exn t.for_terminator
 
   let inverted t =
-    let for_one hashtbl =
-      printf "for_one\n%!";
-      Hashtbl.to_alist hashtbl
-      (* CR gyorsh for ericpts: why do you need to sort? can't you use ids
+    let for_one hashtbl ~equivalence_to_int =
+      (* XCR gyorsh for ericpts: why do you need to sort? can't you use ids
          for indexes into the array directly? if you must sort, can you
          first put them in the array and then sort? it's more memory
          efficient: Array.sort is const, and List.sort is n + log n,
          although they aren't big. *)
-      |> List.sort ~compare:(fun (_, e1) (_, e2) ->
-             Equivalence.compare e1 e2)
-      |> List.mapi ~f:(fun i (instr, e) ->
-             printf "%d = %d\n" i e;
-             assert (i = e);
-             instr)
-      |> Array.of_list
+      let arr = Array.create ~len:(Hashtbl.length hashtbl) None in
+      Hashtbl.iteri hashtbl ~f:(fun ~key:instruction ~data:equivalence ->
+          arr.(equivalence |> equivalence_to_int) <- Some instruction);
+      Array.mapi arr ~f:(fun equivalence instruction_opt ->
+          match instruction_opt with
+          | Some i -> i
+          | None ->
+              failwithf
+                "Could not find any instructions for equivalence class %d"
+                equivalence ())
     in
-    (for_one t.for_basic, for_one t.for_terminator)
+    ( for_one t.for_basic
+        ~equivalence_to_int:Basic_instruction_equivalence.to_int,
+      for_one t.for_terminator
+        ~equivalence_to_int:Terminator_instruction_equivalence.to_int )
   ;;
 end
 
@@ -111,48 +141,68 @@ end
 module Symbolic_block = struct
   module T = struct
     (* This contains the unique id of every instruction *)
-    type t = Equivalence.t array
+    type t = {
+      basics : Basic_instruction_equivalence.t array;
+      terminator : Terminator_instruction_equivalence.t;
+    }
+    [@@deriving compare, sexp_of]
 
     let of_block_generic (b : Cfg.block) ~get_id_for_basic
         ~get_id_for_terminator =
-      let block_length = 1 + List.length b.body in
-      let ret = Array.create ~len:block_length 0 in
+      let block_length = List.length b.body in
+      let basics =
+        Array.create ~len:block_length
+          (Basic_instruction_equivalence.of_int 0)
+      in
       List.iteri b.body ~f:(fun i basic ->
-          ret.(i) <- get_id_for_basic basic);
-      ret.(block_length - 1) <- get_id_for_terminator b.terminator;
-      ret
+          basics.(i) <- get_id_for_basic basic);
+      { basics; terminator = get_id_for_terminator b.terminator }
     ;;
 
-    let of_block (b : Cfg.block)
-        (instruction_equivalences : Equivalence_for_instructions.t) =
+    let of_block (b : Cfg.block) (instruction_index : Instruction_index.t) =
       of_block_generic b
         ~get_id_for_basic:
-          (Equivalence_for_instructions.get_id_for_basic
-             instruction_equivalences)
+          (Instruction_index.get_id_for_basic instruction_index)
         ~get_id_for_terminator:
-          (Equivalence_for_instructions.get_id_for_terminator
-             instruction_equivalences)
+          (Instruction_index.get_id_for_terminator instruction_index)
     ;;
 
     let of_block_exn (b : Cfg.block)
-        (instruction_equivalences : Equivalence_for_instructions.t) =
+        (instruction_index : Instruction_index.t) =
       of_block_generic b
         ~get_id_for_basic:
-          (Equivalence_for_instructions.get_id_for_basic_exn
-             instruction_equivalences)
+          (Instruction_index.get_id_for_basic_exn instruction_index)
         ~get_id_for_terminator:
-          (Equivalence_for_instructions.get_id_for_terminator_exn
-             instruction_equivalences)
+          (Instruction_index.get_id_for_terminator_exn instruction_index)
     ;;
 
-    let compare = [%compare: int array]
-
-    let sexp_of_t = [%sexp_of: int array]
-
-    let hash t =
-      Array.fold t ~init:(Hash.alloc ()) ~f:(fun acc cur ->
-          Int.hash_fold_t acc cur)
+    let hash (t : t) =
+      let for_basics =
+        Array.fold t.basics ~init:(Hash.alloc ()) ~f:(fun acc cur ->
+            Int.hash_fold_t acc (cur |> Basic_instruction_equivalence.to_int))
+      in
+      Int.hash_fold_t for_basics
+        (t.terminator |> Terminator_instruction_equivalence.to_int)
       |> Hash.get_hash_value
+    ;;
+
+    let length (t : t) = 1 + Array.length t.basics
+
+    let invert (t : t) ~inverted_basic ~inverted_terminator =
+      let block_length = Array.length t.basics in
+      let body =
+        List.init (block_length - 1) ~f:(fun i -> inverted_basic.(i))
+      in
+      let terminator =
+        inverted_terminator.(t.terminator
+                             |> Terminator_instruction_equivalence.to_int)
+      in
+      {
+        Cfg.start = -1;
+        body;
+        terminator;
+        predecessors = Cfg.LabelSet.empty;
+      }
     ;;
   end
 
@@ -161,53 +211,55 @@ module Symbolic_block = struct
 end
 
 type t = {
-  instruction_equivalences : Equivalence_for_instructions.t;
-  symbolic_block_equivalences : (Symbolic_block.t, Equivalence.t) Hashtbl.t;
+  instruction_index : Instruction_index.t;
+  symbolic_block_index : (Symbolic_block.t, Block_equivalence.t) Hashtbl.t;
   mutable frequency : int Array.t;
 }
 
 let empty () =
   {
-    instruction_equivalences = Equivalence_for_instructions.empty ();
-    symbolic_block_equivalences =
-      Hashtbl.create ~size:100_000 ~growth_allowed:true
-        (module Symbolic_block);
+    instruction_index = Instruction_index.empty ();
+    symbolic_block_index = Hashtbl.create (module Symbolic_block);
     frequency = Array.create ~len:200_000 0;
   }
 ;;
 
 let update t (block : Cfg.block) =
-  let symbolic_block =
-    Symbolic_block.of_block block t.instruction_equivalences
-  in
+  let symbolic_block = Symbolic_block.of_block block t.instruction_index in
   let equivalence =
-    get_id_or_add t.symbolic_block_equivalences symbolic_block
+    get_id_or_add t.symbolic_block_index symbolic_block
+      ~equivalence_of_int:Block_equivalence.of_int
+    |> Block_equivalence.to_int
   in
   if equivalence >= Array.length t.frequency then (
     assert (
-      Hashtbl.length t.symbolic_block_equivalences
-      = Array.length t.frequency + 1 );
+      Hashtbl.length t.symbolic_block_index = Array.length t.frequency + 1
+    );
 
-    (* CR gyorsh for ericpts: Array.init would do it in one pass *)
+    (* XCR gyorsh for ericpts: Array.init would do it in one pass *)
     let new_frequency =
-      Array.create ~len:(Array.length t.frequency * 2) 0
+      let n = Array.length t.frequency in
+      for i = 0 to n - 1 do
+        (* We should have encountered at least one member of each
+           equivalence class up to this point. *)
+        assert (t.frequency.(i) >= 1)
+      done;
+      Array.init (2 * n) ~f:(fun i -> if i < n then t.frequency.(i) else 0)
     in
-    Array.iteri t.frequency ~f:(fun i x -> new_frequency.(i) <- x);
-    for i = 0 to Array.length t.frequency - 1 do
-      assert (new_frequency.(i) >= 1)
-    done;
     t.frequency <- new_frequency );
 
   t.frequency.(equivalence) <- t.frequency.(equivalence) + 1
 ;;
 
-let frequency_exn t equivalence = t.frequency.(equivalence)
+let frequency_exn (t : t) (equivalence : Block_equivalence.t) =
+  t.frequency.(equivalence |> Block_equivalence.to_int)
+;;
 
-let equivalence_exn t (block : Cfg.block) : Equivalence.t =
+let equivalence_exn t (block : Cfg.block) : Block_equivalence.t =
   let symbolic_block =
-    Symbolic_block.of_block_exn block t.instruction_equivalences
+    Symbolic_block.of_block_exn block t.instruction_index
   in
-  Hashtbl.find_exn t.symbolic_block_equivalences symbolic_block
+  Hashtbl.find_exn t.symbolic_block_index symbolic_block
 ;;
 
 let to_file t ~filename =
@@ -216,7 +268,7 @@ let to_file t ~filename =
   let as_alist =
     (* Sanity check, that we did not somehow end up with a discontinuous
        frequency array. *)
-    let n_classes = Hashtbl.length t.symbolic_block_equivalences in
+    let n_classes = Hashtbl.length t.symbolic_block_index in
     for i = 0 to n_classes - 1 do
       assert (t.frequency.(i) >= 1)
     done;
@@ -226,9 +278,9 @@ let to_file t ~filename =
     done;
     Array.unsafe_truncate t.frequency ~len:n_classes;
 
-    ( Hashtbl.to_alist t.instruction_equivalences.for_basic,
-      Hashtbl.to_alist t.instruction_equivalences.for_terminator,
-      Hashtbl.to_alist t.symbolic_block_equivalences,
+    ( Hashtbl.to_alist t.instruction_index.for_basic,
+      Hashtbl.to_alist t.instruction_index.for_terminator,
+      Hashtbl.to_alist t.symbolic_block_index,
       t.frequency )
   in
   Out_channel.with_file ~binary:true filename ~f:(fun out_channel ->
@@ -237,30 +289,36 @@ let to_file t ~filename =
 
 let of_file ~filename =
   In_channel.with_file ~binary:true filename ~f:(fun inc ->
-      let for_basic, for_terminator, symbolic_block_equivalences, frequency
-          =
+      let for_basic, for_terminator, symbolic_block_index, frequency =
         Marshal.from_channel inc
       in
       {
-        instruction_equivalences =
+        instruction_index =
           {
-            Equivalence_for_instructions.for_basic =
+            Instruction_index.for_basic =
               for_basic
-              |> Hashtbl.of_alist_exn
-                   (module Equivalence_for_instructions.For_basic);
-            Equivalence_for_instructions.for_terminator =
+              |> Hashtbl.of_alist_exn (module Instruction_index.For_basic);
+            Instruction_index.for_terminator =
               for_terminator
               |> Hashtbl.of_alist_exn
-                   (module Equivalence_for_instructions.For_terminator);
+                   (module Instruction_index.For_terminator);
           };
-        symbolic_block_equivalences =
-          symbolic_block_equivalences
+        symbolic_block_index =
+          symbolic_block_index
           |> Hashtbl.of_alist_exn (module Symbolic_block);
         frequency;
       })
 ;;
 
-(* CR gyorsh for ericpts: does Hashtbl.to_alist guarantee that the order of
+module Equivalence_metadata = struct
+  type t = {
+    frequency : int;
+    equivalence : Block_equivalence.t;
+    representative : Symbolic_block.t;
+  }
+end
+
+(* XCR gyorsh for ericpts: does Hashtbl.to_alist guarantee that the order of
    pairs in the resulting list is the order of keys? also, wouldn't to_alist
    allocate a huge new list? Another option is to iterate over the hashtable
    and then use random access into the frequency array.
@@ -270,28 +328,29 @@ let of_file ~filename =
 
    why do you use backticks and not records or named arguments? *)
 let filter_and_sort_equivalences t ~min_block_size =
-  List.zip_exn
-    (Array.to_list t.frequency)
-    (Hashtbl.to_alist t.symbolic_block_equivalences)
-  |> List.filter_map ~f:(fun (frequency, (symbolic_block, equivalence)) ->
-         if Array.length symbolic_block >= min_block_size then
-           Some
-             (`frequency frequency, symbolic_block, `equivalence equivalence)
-         else None)
-  |> List.sort ~compare:(fun (`frequency f1, _, _) (`frequency f2, _, _) ->
-         -Int.compare f1 f2)
+  Hashtbl.filter_mapi t.symbolic_block_index
+    ~f:(fun ~key:representative ~data:equivalence ->
+      let frequency =
+        t.frequency.(equivalence |> Block_equivalence.to_int)
+      in
+      if Symbolic_block.length representative >= min_block_size then
+        Some { Equivalence_metadata.frequency; representative; equivalence }
+      else None)
+  |> Hashtbl.data
+  |> List.sort ~compare:(fun e1 e2 ->
+         -Int.compare e1.frequency e2.frequency)
 ;;
 
 let equivalences_by_frequency t ~min_block_size =
   filter_and_sort_equivalences t ~min_block_size
-  |> List.map ~f:(fun (_, _, `equivalence e) -> e)
+  |> List.map ~f:(fun e -> e.equivalence)
 ;;
 
-let print_load t =
+let print_hashtbl_load_statistics t =
   sprintf "Symbolic_blocks: %d; Instructions: (basic: %d) (terminator: %d)"
-    (Hashtbl.length t.symbolic_block_equivalences)
-    (Hashtbl.length t.instruction_equivalences.for_basic)
-    (Hashtbl.length t.instruction_equivalences.for_terminator)
+    (Hashtbl.length t.symbolic_block_index)
+    (Hashtbl.length t.instruction_index.for_basic)
+    (Hashtbl.length t.instruction_index.for_terminator)
 ;;
 
 let print_most_frequent t ~min_block_size ~n_most_frequent_equivalences =
@@ -301,17 +360,14 @@ let print_most_frequent t ~min_block_size ~n_most_frequent_equivalences =
       n_most_frequent_equivalences
   in
   let inverted_basic, inverted_terminator =
-    Equivalence_for_instructions.inverted t.instruction_equivalences
+    Instruction_index.inverted t.instruction_index
   in
-  let invert_symbolic_block (s : Symbolic_block.t) =
-    let block_length = Array.length s in
-    let body =
-      List.init (block_length - 1) ~f:(fun i -> inverted_basic.(i))
-    in
-    let terminator = inverted_terminator.(s.(block_length - 1)) in
-    { Cfg.start = -1; body; terminator; predecessors = Cfg.LabelSet.empty }
-  in
-  List.iter filtered ~f:(fun (`frequency f, s, `equivalence e) ->
-      printf "Equivalence class %d with frequency %d: \n" e f;
-      Utils.print_block (invert_symbolic_block s) ~block_print_mode:`As_cfg)
+  List.iter filtered ~f:(fun e ->
+      printf "Equivalence class %d with frequency %d: \n"
+        (e.equivalence |> Block_equivalence.to_int)
+        e.frequency;
+      Utils.print_block
+        (Symbolic_block.invert e.representative ~inverted_basic
+           ~inverted_terminator)
+        ~block_print_mode:`As_cfg)
 ;;

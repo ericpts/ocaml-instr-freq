@@ -10,7 +10,7 @@ open Ocamlcfg
 type t = {
   on_block :
     Cfg.block ->
-    equivalence:Index.Equivalence.t ->
+    equivalence:Index.Block_equivalence.t ->
     frequency:int ->
     [ `Stop | `Continue ];
   on_finish_iteration : unit -> unit;
