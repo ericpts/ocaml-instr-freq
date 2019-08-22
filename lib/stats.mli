@@ -21,7 +21,7 @@ val combine : t list -> t
 val print_most_popular_classes :
   Index.t ->
   n_most_frequent_equivalences:int ->
-  max_representatives_per_equivalence:int ->
+  n_real_blocks_to_print:int ->
   block_print_mode:[< `As_assembly | `As_cfg ] ->
   min_block_size:int ->
   t

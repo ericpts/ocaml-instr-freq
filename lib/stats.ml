@@ -26,8 +26,12 @@ let combine ts =
   { on_block; on_finish_iteration }
 ;;
 
-let print_most_popular_classes index ~n_most_frequent_equivalences
-    ~max_representatives_per_equivalence ~block_print_mode ~min_block_size =
+let print_most_popular_classes
+    index
+    ~n_most_frequent_equivalences
+    ~n_real_blocks_to_print
+    ~block_print_mode
+    ~min_block_size =
   let equivalences_to_print =
     List.take
       (Index.equivalences_by_frequency index ~min_block_size)
@@ -38,7 +42,7 @@ let print_most_popular_classes index ~n_most_frequent_equivalences
       Hashtbl.create_mapped
         (module Index.Block_equivalence)
         ~get_key:Fn.id
-        ~get_data:(Fn.const max_representatives_per_equivalence)
+        ~get_data:(Fn.const n_real_blocks_to_print)
         equivalences_to_print
     with
     | `Ok hashtbl -> hashtbl

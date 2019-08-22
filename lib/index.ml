@@ -99,8 +99,8 @@ module Instruction_index = struct
       t.for_basic instruction
   ;;
 
-  let get_id_for_terminator (t : t)
-      (instruction : Cfg.terminator Cfg.instruction) =
+  let get_id_for_terminator
+      (t : t) (instruction : Cfg.terminator Cfg.instruction) =
     get_id_or_add
       ~equivalence_of_int:Terminator_instruction_equivalence.of_int
       t.for_terminator instruction
@@ -147,8 +147,8 @@ module Symbolic_block = struct
     }
     [@@deriving compare, sexp_of]
 
-    let of_block_generic (b : Cfg.block) ~get_id_for_basic
-        ~get_id_for_terminator =
+    let of_block_generic
+        (b : Cfg.block) ~get_id_for_basic ~get_id_for_terminator =
       let block_length = List.length b.body in
       let basics =
         Array.create ~len:block_length
@@ -167,8 +167,8 @@ module Symbolic_block = struct
           (Instruction_index.get_id_for_terminator instruction_index)
     ;;
 
-    let of_block_exn (b : Cfg.block)
-        (instruction_index : Instruction_index.t) =
+    let of_block_exn
+        (b : Cfg.block) (instruction_index : Instruction_index.t) =
       of_block_generic b
         ~get_id_for_basic:
           (Instruction_index.get_id_for_basic_exn instruction_index)
@@ -191,7 +191,9 @@ module Symbolic_block = struct
     let invert (t : t) ~inverted_basic ~inverted_terminator =
       let block_length = Array.length t.basics in
       let body =
-        List.init (block_length - 1) ~f:(fun i -> inverted_basic.(i))
+        List.init (block_length - 1) ~f:(fun i ->
+            inverted_basic.(t.basics.(i)
+                            |> Basic_instruction_equivalence.to_int))
       in
       let terminator =
         inverted_terminator.(t.terminator

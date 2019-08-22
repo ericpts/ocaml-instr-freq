@@ -57,9 +57,15 @@ let build_index files ~(index_file : Filename.t) =
   index
 ;;
 
-let main files ~index_file ~max_representatives_per_equivalence
-    ~n_most_frequent_equivalences ~block_print_mode ~min_block_size
-    ~min_equivalence_class_size =
+let main
+    files
+    ~index_file
+    ~n_real_blocks_to_print
+    ~n_most_frequent_equivalences
+    ~block_print_mode
+    ~min_block_size
+    ~min_equivalence_class_size
+    ~count_equivalence_classes_of_each_size =
   let index =
     if Sys.file_exists_exn index_file then (
       printf "Loading cached index from %s...%!" index_file;
@@ -77,12 +83,17 @@ let main files ~index_file ~max_representatives_per_equivalence
      restrictions? e.g., does order they are listed in matter / do they have
      to preserve index? *)
   let { Stats.on_block; on_finish_iteration } =
-    Stats.combine
-      [ Stats.print_most_popular_classes index
-          ~max_representatives_per_equivalence ~n_most_frequent_equivalences
-          ~block_print_mode ~min_block_size;
-        Stats.count_equivalence_classes_of_each_size ()
-      ]
+    let statistics = ref [] in
+    let add_stat stat = statistics := stat :: !statistics in
+    if n_real_blocks_to_print > 0 then
+      add_stat
+        (Stats.print_most_popular_classes index ~n_real_blocks_to_print
+           ~n_most_frequent_equivalences ~block_print_mode ~min_block_size);
+
+    if count_equivalence_classes_of_each_size then
+      add_stat (Stats.count_equivalence_classes_of_each_size ());
+
+    Stats.combine !statistics
   in
   ( try
       List.iter files ~f:(fun file ->
@@ -105,11 +116,13 @@ let main_command =
       "Group contents of basic blocks based on equivalence classes, and \
        print the most common classes.")
     [%map_open.Command.Let_syntax
-      let files = anon (sequence ("input" %: Filename.arg_type))
-      and max_representatives_per_equivalence =
-        flag "-max-representatives-per-equivalence"
+      let anon_files = anon (sequence ("input" %: Filename.arg_type))
+      and n_real_blocks_to_print =
+        flag "-print-n-real-blocks"
           (optional_with_default 5 int)
-          ~doc:"n Print [n] representatives for each equivalence class"
+          ~doc:
+            "n Print [n] actual blocks from the codebase for each \
+             equivalence class, instead of a synthetic reconstruction."
       and n_most_frequent_equivalences =
         flag "-n-most-frequent-equivalences"
           (optional_with_default 10 int)
@@ -124,6 +137,12 @@ let main_command =
             "n Only report equivalence classes, for which the \
              representative block has at least [n] instructions (including \
              the terminator)."
+      and count_equivalence_classes_of_each_size =
+        flag "-count-equivalence-classes-of-each-size" no_arg
+          ~doc:
+            "Report statistics of the form \
+             (number_of_members_in_equivalence_class, equivalence classes \
+             with this many members). Might take a long time."
       and min_equivalence_class_size =
         flag "-min-equivalence-class-size"
           (optional_with_default 5 int)
@@ -133,12 +152,14 @@ let main_command =
       and index_file =
         flag "-index-file"
           (required Filename.arg_type)
-          ~doc:"Location of index file. Will be built if it does not exist."
-      and from_file =
-        flag "-from-file" no_arg
           ~doc:
-            "Treat the file argument as containing the list of files to be \
-             processed."
+            "filepath Location of index file. Will be built if it does not \
+             exist."
+      and from_file =
+        flag "-from-file"
+          (optional Filename.arg_type)
+          ~doc:
+            "list-file Treat each line of [list-file] as a file to process."
       in
       let block_print_mode =
         match print_blocks_as_assembly with
@@ -146,18 +167,17 @@ let main_command =
         | false -> `As_cfg
       in
       let files =
-        if from_file then
-          if List.length files <> 1 then
-            failwith
-              "Argument -from-file requires that the program be passed a \
-               single file!"
-          else In_channel.read_lines (List.hd_exn files)
-        else files
+        anon_files
+        @
+        match from_file with
+        | None -> []
+        | Some file -> In_channel.read_lines file
       in
       fun () ->
-        main files ~index_file ~max_representatives_per_equivalence
+        main files ~index_file ~n_real_blocks_to_print
           ~n_most_frequent_equivalences ~block_print_mode ~min_block_size
-          ~min_equivalence_class_size]
+          ~min_equivalence_class_size
+          ~count_equivalence_classes_of_each_size]
 ;;
 
 let () = Command.run main_command
