@@ -22,40 +22,69 @@ let eprintf_progress fmt =
     fmt
 ;;
 
-exception Stop_iteration
-
-let with_blocks_of_file (file : Filename.t) ~(f : Cfg.block -> unit) =
+let read_file (file : Filename.t) =
   let open Linear_format in
   let ui, _ = restore file in
-  let functions =
-    List.filter_map ui.items ~f:(fun item ->
-        match item with
-        | Func f ->
-            Some (Cfg_builder.from_linear f ~preserve_orig_labels:false)
-        | Data _ -> None)
-  in
-  List.iter functions ~f:(fun cfg_builder ->
-      let layout = Cfg_builder.get_layout cfg_builder in
-      List.iter layout ~f:(fun label ->
-          let block =
-            Cfg_builder.get_block cfg_builder label |> Option.value_exn
+  List.filter_map ui.items ~f:(fun item ->
+      match item with
+      | Func f ->
+          let cfg_builder =
+            Cfg_builder.from_linear f ~preserve_orig_labels:false
           in
-          f block))
+          let layout = Cfg_builder.get_layout cfg_builder in
+          let blocks =
+            List.map layout ~f:(fun label ->
+                Cfg_builder.get_block cfg_builder label |> Option.value_exn)
+          in
+          Some (f, blocks)
+      | Data _ -> None)
 ;;
 
 let build_index files ~(index_file : Filename.t) =
   let total_number_of_files = List.length files in
   printf "Building the index...\n%!";
   let index = Index.empty () in
+  let functions_per_file = ref [] in
+  let blocks_per_function = ref [] in
+  let instructions_per_block = ref [] in
   List.iteri files ~f:(fun ifile file ->
       eprintf_progress "Processing file %d/%d; Index load: %s \r" ifile
         total_number_of_files
         (Index.print_hashtbl_load_statistics index);
-      with_blocks_of_file file ~f:(fun block -> Index.update index block));
+      let functions = read_file file in
+      functions_per_file := List.length functions :: !functions_per_file;
+      List.iter functions ~f:(fun (_fun_decl, blocks) ->
+          blocks_per_function := List.length blocks :: !blocks_per_function;
+          List.iter blocks ~f:(fun block ->
+              Index.update index block;
+              instructions_per_block :=
+                (List.length block.body + 1) :: !instructions_per_block)));
   let () = Index.to_file index ~filename:index_file in
+  let sum nums = List.sum (module Int) nums ~f:Fn.id in
+  let mean nums =
+    Float.of_int (sum nums) /. Float.of_int (List.length nums)
+  in
+  let max nums =
+    List.max_elt nums ~compare:Int.compare |> Option.value_exn
+  in
+  let blocks = !blocks_per_function in
+  let functions = !functions_per_file in
+  let instructions = !instructions_per_block in
   printf "\nSaved index to %s\n%!" index_file;
+
+  Out_channel.with_file (index_file ^ ".log") ~f:(fun f ->
+      fprintf f "Processed:\n";
+      fprintf f "\tfiles: %d\n" (List.length files);
+      fprintf f "\tfunctions: total %d; mean/file %f; max/file %d \n"
+        (sum functions) (mean functions) (max functions);
+      fprintf f "\tblocks: total %d; mean/function %f; max/function %d \n"
+        (sum blocks) (mean blocks) (max blocks);
+      fprintf f "\tinstructions: total %d; mean/block %f; max/block %d\n"
+        (sum instructions) (mean instructions) (max instructions));
   index
 ;;
+
+exception Stop_iteration
 
 let main
     files
@@ -68,9 +97,9 @@ let main
     ~count_equivalence_classes_of_each_size =
   let index =
     if Sys.file_exists_exn index_file then (
-      printf "Loading cached index from %s...%!" index_file;
+      printf "Loading cached index from %s... %!" index_file;
       let index = Index.of_file ~filename:index_file in
-      printf " loaded!\n%!";
+      printf "loaded!\n%!";
       index )
     else build_index files ~index_file
   in
@@ -97,16 +126,19 @@ let main
   in
   ( try
       List.iter files ~f:(fun file ->
-          with_blocks_of_file file ~f:(fun block ->
-              if List.length block.body + 1 >= min_block_size then
-                let equivalence = Index.equivalence_exn index block in
-                let frequency = Index.frequency_exn index equivalence in
-                if frequency >= min_equivalence_class_size then
-                  match on_block block ~equivalence ~frequency with
-                  | `Continue -> ()
-                  | `Stop -> raise Stop_iteration))
+          List.iter (read_file file) ~f:(fun (fun_decl, blocks) ->
+              List.iter blocks ~f:(fun block ->
+                  if List.length block.body + 1 >= min_block_size then
+                    let equivalence = Index.equivalence_exn index block in
+                    let frequency = Index.frequency_exn index equivalence in
+                    if frequency >= min_equivalence_class_size then
+                      match
+                        on_block ~file ~equivalence ~frequency block
+                          fun_decl
+                      with
+                      | `Continue -> ()
+                      | `Stop -> raise Stop_iteration)))
     with Stop_iteration -> () );
-
   on_finish_iteration ()
 ;;
 

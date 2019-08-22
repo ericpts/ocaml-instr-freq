@@ -3,19 +3,21 @@ open Ocamlcfg
 
 type t = {
   on_block :
-    Cfg.block ->
+    file:string ->
     equivalence:Index.Block_equivalence.t ->
     frequency:int ->
+    Cfg.block ->
+    Linear.fundecl ->
     [ `Stop | `Continue ];
   on_finish_iteration : unit -> unit;
 }
 
 let combine ts =
   let active_ts = ref ts in
-  let on_block block ~equivalence ~frequency =
+  let on_block ~file ~equivalence ~frequency block fundecl =
     active_ts :=
       List.filter !active_ts ~f:(fun t ->
-          match t.on_block block ~equivalence ~frequency with
+          match t.on_block ~file ~equivalence ~frequency block fundecl with
           | `Continue -> true
           | `Stop -> false);
     if List.length !active_ts > 0 then `Continue else `Stop
@@ -52,17 +54,18 @@ let print_most_popular_classes
             Index.Block_equivalence.t list} "
           list ()
   in
-  let on_block block ~equivalence ~frequency =
+  let on_block
+      ~file ~equivalence ~frequency block (fun_decl : Linear.fundecl) =
     match Hashtbl.find remaining_to_print equivalence with
     | None -> `Continue
     | Some n ->
-        (* XCR gyorsh for ericpts: can you finish iteration earlier here?
-           just remove from equivalences_to_print when current_printed
-           reaches max? I bet it will finish after scanning just a few of
-           the linear files. *)
-        printf "Equivalence %d with %d members: \n"
+        printf
+          "Equivalence %d with %d members;\n\tfile: %s\n\tfunction: %s\n"
           (Index.Block_equivalence.to_int equivalence)
-          frequency;
+          frequency
+          (Utils.color Utils.Cyan file)
+          (Utils.color Utils.Cyan fun_decl.fun_name);
+
         Utils.print_block block ~block_print_mode;
         printf "%!";
         let rem = n - 1 in
@@ -77,7 +80,7 @@ let print_most_popular_classes
 
 let count_equivalence_classes_of_each_size () =
   let equivalence_classes_of_each_size = Hashtbl.create (module Int) in
-  let on_block _block ~equivalence:_ ~frequency =
+  let on_block ~file:_ ~equivalence:_ ~frequency _fun_decl _block =
     Hashtbl.update equivalence_classes_of_each_size frequency ~f:(function
       | Some x -> x + 1
       | None -> 1);

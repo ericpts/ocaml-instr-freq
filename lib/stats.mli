@@ -9,9 +9,11 @@ open Ocamlcfg
    should not depend on that. *)
 type t = {
   on_block :
-    Cfg.block ->
+    file:string ->
     equivalence:Index.Block_equivalence.t ->
     frequency:int ->
+    Cfg.block ->
+    Linear.fundecl ->
     [ `Stop | `Continue ];
   on_finish_iteration : unit -> unit;
 }
