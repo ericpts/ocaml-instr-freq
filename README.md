@@ -3,6 +3,9 @@
 Count frequency of basic blocks in OCaml code.
 This is useful for knowing which optimizations would have the most impact, if they were to be implemented in the compiler.
 
+Currently, this only works for x86-64 targets.
+
+
 ## Usage example
 
 First, you need to tell the ocaml compiler to save the linear representation of your sources:
