@@ -10,23 +10,19 @@ let chain_compare list =
     ~finish:Fn.id
 ;;
 
-(* XCR gyorsh for ericpts: Where is it used? I haven't reviewed it. Deleted
-   the unused code; now it is used in compare_instruction. *)
 module Modulo_register_renaming = struct
-  let symbolize_register (reg : Reg.t) ~(include_index_offset : bool) =
-    let maybe_add_index base index =
-      match include_index_offset with
-      | true -> sprintf "%s#%d" base index
-      | false -> base
-    in
+  let symbolize_register (reg : Reg.t) ~(include_register_number : bool) =
     match reg.Reg.loc with
     | Reg.Unknown -> "unknown"
-    | Reg.Reg num -> maybe_add_index "reg" num
+    | Reg.Reg num -> (
+        match include_register_number with
+        | true -> sprintf "reg#%d" num
+        | false -> "reg" )
     | Stack location -> (
         match location with
-        | Local x -> maybe_add_index "stack#local" x
-        | Incoming x -> maybe_add_index "stack#incoming" x
-        | Outgoing x -> maybe_add_index "stack#outgoing" x )
+        | Local _ -> "stack#local"
+        | Incoming _ -> "stack#incoming"
+        | Outgoing _ -> "stack#outgoing" )
   ;;
 end
 
@@ -278,13 +274,14 @@ module From_cfg = struct
      to check Proc.register_class for amd64 backend, because there are only
      2 (float and everything else), and float is only used in special float
      instructions. *)
-  let compare_instruction (i1 : 'a Cfg.instruction)
-      (i2 : 'a Cfg.instruction) ~(compare_underlying : 'a -> 'a -> int) :
-      int =
+  let compare_instruction
+      (i1 : 'a Cfg.instruction)
+      (i2 : 'a Cfg.instruction)
+      ~(compare_underlying : 'a -> 'a -> int) : int =
     let compare_reg_arrays arr1 arr2 =
       let symbolize =
         Modulo_register_renaming.symbolize_register
-          ~include_index_offset:false
+          ~include_register_number:false
       in
       Array.compare String.compare
         (Array.map arr1 ~f:symbolize)

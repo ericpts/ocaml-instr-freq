@@ -30,6 +30,13 @@ module Terminator_instruction_equivalence : sig
 end =
   Int
 
+module Register_equivalence : sig
+  type t
+
+  include Equivalence with type t := t
+end =
+  Int
+
 let get_id_or_add ~equivalence_of_int hashtbl key =
   match Hashtbl.find hashtbl key with
   | Some id -> id
@@ -144,19 +151,37 @@ module Symbolic_block = struct
     type t = {
       basics : Basic_instruction_equivalence.t array;
       terminator : Terminator_instruction_equivalence.t;
+      (* Contains the registers for every instruction, including the
+         terminator. *)
+      registers : Register_equivalence.t array array;
     }
     [@@deriving compare, sexp_of]
 
     let of_block_generic
         (b : Cfg.block) ~get_id_for_basic ~get_id_for_terminator =
-      let block_length = List.length b.body in
+      let body_length = List.length b.body in
       let basics =
-        Array.create ~len:block_length
+        Array.create ~len:body_length
           (Basic_instruction_equivalence.of_int 0)
       in
       List.iteri b.body ~f:(fun i basic ->
           basics.(i) <- get_id_for_basic basic);
-      { basics; terminator = get_id_for_terminator b.terminator }
+
+      let register_index = Hashtbl.create (module String) in
+      let symbolize_registers_of instr =
+        Array.map
+          (Array.concat [ instr.Cfg.arg; instr.res ])
+          ~f:(fun reg ->
+            get_id_or_add ~equivalence_of_int:Register_equivalence.of_int
+              register_index
+              (Types.Modulo_register_renaming.symbolize_register reg
+                 ~include_register_number:true))
+      in
+      let registers = Array.create ~len:(body_length + 1) [||] in
+      List.iteri b.body ~f:(fun i basic ->
+          registers.(i) <- symbolize_registers_of basic);
+      registers.(body_length) <- symbolize_registers_of b.terminator;
+      { basics; terminator = get_id_for_terminator b.terminator; registers }
     ;;
 
     let of_block (b : Cfg.block) (instruction_index : Instruction_index.t) =
@@ -177,13 +202,20 @@ module Symbolic_block = struct
     ;;
 
     let hash (t : t) =
-      let for_basics =
+      let state =
         Array.fold t.basics ~init:(Hash.alloc ()) ~f:(fun acc cur ->
             Int.hash_fold_t acc (cur |> Basic_instruction_equivalence.to_int))
       in
-      Int.hash_fold_t for_basics
-        (t.terminator |> Terminator_instruction_equivalence.to_int)
-      |> Hash.get_hash_value
+      let state =
+        Int.hash_fold_t state
+          (t.terminator |> Terminator_instruction_equivalence.to_int)
+      in
+      let state =
+        Array.fold ~init:state t.registers ~f:(fun state arr ->
+            Array.fold arr ~init:state ~f:(fun state x ->
+                Int.hash_fold_t state (x |> Register_equivalence.to_int)))
+      in
+      Hash.get_hash_value state
     ;;
 
     let length (t : t) = 1 + Array.length t.basics
