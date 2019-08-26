@@ -39,12 +39,12 @@ module From_cmm = struct
     | Single
     | Double
     | Double_u
-  [@@deriving compare, sexp_of, hash]
+  [@@deriving compare, sexp, hash]
 
   type raise_kind = Cmm.raise_kind =
     | Raise_withtrace
     | Raise_notrace
-  [@@deriving compare, sexp_of, hash]
+  [@@deriving compare, sexp, hash]
 end
 
 (* XCR gyorsh for ericpts: Arch.addressing_mode & co won't build when the
@@ -59,14 +59,14 @@ module From_arch = struct
     | Iindexed2 of (int[@compare.ignore])
     | Iscaled of (int[@compare.ignore]) * (int[@compare.ignore])
     | Iindexed2scaled of (int[@compare.ignore]) * (int[@compare.ignore])
-  [@@deriving compare, sexp_of, hash]
+  [@@deriving compare, sexp, hash]
 
   type float_operation = Arch.float_operation =
     | Ifloatadd
     | Ifloatsub
     | Ifloatmul
     | Ifloatdiv
-  [@@deriving compare, sexp_of, hash]
+  [@@deriving compare, sexp, hash]
 
   type specific_operation = Arch.specific_operation =
     | Ilea of addressing_mode
@@ -77,7 +77,7 @@ module From_arch = struct
     | Isqrtf
     | Ifloatsqrtf of addressing_mode
     | Isextend32
-  [@@deriving compare, sexp_of, hash]
+  [@@deriving compare, sexp, hash]
 end
 
 module From_lambda = struct
@@ -88,7 +88,7 @@ module From_lambda = struct
     | Cgt
     | Cle
     | Cge
-  [@@deriving compare, sexp_of, hash]
+  [@@deriving compare, sexp, hash]
 
   type float_comparison = Lambda.float_comparison =
     | CFeq
@@ -101,14 +101,14 @@ module From_lambda = struct
     | CFnle
     | CFge
     | CFnge
-  [@@deriving compare, sexp_of, hash]
+  [@@deriving compare, sexp, hash]
 end
 
 module From_mach = struct
   type integer_comparison = Mach.integer_comparison =
     | Isigned of From_lambda.integer_comparison
     | Iunsigned of From_lambda.integer_comparison
-  [@@deriving compare, sexp_of, hash]
+  [@@deriving compare, sexp, hash]
 
   type integer_operation = Mach.integer_operation =
     | Iadd
@@ -128,7 +128,7 @@ module From_mach = struct
         label_after_error : int sexp_option; [@compare.ignore]
         spacetime_index : int; [@compare.ignore]
       }
-  [@@deriving compare, sexp_of, hash]
+  [@@deriving compare, sexp, hash]
 
   type test = Mach.test =
     | Itruetest
@@ -138,13 +138,19 @@ module From_mach = struct
     | Ifloattest of From_lambda.float_comparison
     | Ioddtest
     | Ieventest
-  [@@deriving compare, sexp_of, hash]
+  [@@deriving compare, sexp, hash]
 end
 
 module From_ident = struct
   type t = Ident.t [@@deriving compare]
 
   let sexp_of_t t = Ident.name t |> Sexp.of_string
+
+  let t_of_sexp sexp =
+    (* CR estavarache: This is a hack, in that create_local s will return
+       different results if called twice with the same argument. *)
+    String.t_of_sexp sexp |> Ident.create_local
+  ;;
 
   let hash t = String.hash (Ident.name t)
 
@@ -193,7 +199,7 @@ module From_cfg = struct
         provenance : unit option;
         is_assignment : bool;
       } [@compare.ignore]
-  [@@deriving compare, sexp_of, hash]
+  [@@deriving compare, sexp, hash]
 
   type func_call_operation = Cfg.func_call_operation =
     | Indirect of { label_after : int [@compare.ignore] }
@@ -201,7 +207,7 @@ module From_cfg = struct
         func : string; [@compare.ignore]
         label_after : int; [@compare.ignore]
       }
-  [@@deriving compare, sexp_of, hash]
+  [@@deriving compare, sexp, hash]
 
   type prim_call_operation = Cfg.prim_call_operation =
     | External of {
@@ -219,12 +225,12 @@ module From_cfg = struct
         label_after_error : int option; [@compare.ignore]
         spacetime_index : int; [@compare.ignore]
       }
-  [@@deriving compare, sexp_of, hash]
+  [@@deriving compare, sexp, hash]
 
   type call_operation = Cfg.call_operation =
     | P of prim_call_operation
     | F of func_call_operation
-  [@@deriving compare, sexp_of, hash]
+  [@@deriving compare, sexp, hash]
 
   type basic = Cfg.basic =
     | Op of operation
@@ -234,19 +240,19 @@ module From_cfg = struct
     | Pushtrap of { lbl_handler : int [@compare.ignore] }
     | Poptrap
     | Prologue
-  [@@deriving compare, sexp_of, hash]
+  [@@deriving compare, sexp, hash]
 
   type condition = Cfg.condition =
     | Always
     | Test of From_mach.test
-  [@@deriving compare, sexp_of, hash]
+  [@@deriving compare, sexp, hash]
 
   type successor = condition * (int[@compare.ignore])
-  [@@deriving compare, sexp_of, hash]
+  [@@deriving compare, sexp, hash]
 
-  let hash_fold_array f state array = Array.fold array ~init:state ~f
+  let hash_fold_array = Utils.hash_fold_array
 
-  type switch_array = int array [@@deriving sexp_of]
+  type switch_array = int array [@@deriving sexp]
 
   let compare_switch_array arr1 arr2 =
     Int.compare (Array.length arr1) (Array.length arr2)
@@ -262,7 +268,7 @@ module From_cfg = struct
     | Return
     | Raise of From_cmm.raise_kind
     | Tailcall of func_call_operation
-  [@@deriving compare, sexp_of, hash]
+  [@@deriving compare, sexp, hash]
 
   (* XCR gyorsh for ericpts: I think I confused you about it earlier. We do
      need to check that i1.arg and i1.res use the same variant of Reg.loc as
@@ -302,3 +308,45 @@ module From_cfg = struct
     compare_instruction ~compare_underlying:compare_terminator
   ;;
 end
+
+let emit_assembly (block : Cfg.block) =
+  let terminator =
+    Cfg_builder.linearize_terminator block.terminator
+      ~next:Cfg_builder.labelled_insn_end
+  in
+  let fun_body =
+    List.fold_right block.body ~init:terminator
+      ~f:Cfg_builder.basic_to_linear
+  in
+  let fundecl =
+    {
+      Linear.fun_name = "block_to_print";
+      fun_body;
+      fun_fast = false;
+      fun_dbg = Debuginfo.none;
+      fun_spacetime_shape = None;
+      fun_num_stack_slots = Caml.Array.make Proc.num_register_classes 0;
+      fun_frame_required = false;
+      fun_prologue_required = false;
+      fun_contains_calls = false;
+    }
+  in
+  X86_proc.reset_asm_code ();
+  Emit.fundecl fundecl;
+  X86_proc.generate_code
+    (Some (X86_gas.generate_asm !Emitaux.output_channel))
+;;
+
+let print_block (block : Cfg.block) ~block_print_mode =
+  print_endline (Utils.color Green (sprintf "Block %d: {" block.start));
+
+  ( match block_print_mode with
+  | `As_assembly -> emit_assembly block
+  | `As_cfg ->
+      List.iter block.body ~f:(fun instruction ->
+          printf !"\t%{sexp:From_cfg.basic};\n" instruction.desc);
+
+      printf !"\t#-%{sexp:From_cfg.terminator}-#\n" block.terminator.desc );
+
+  print_endline (Utils.color Green "}")
+;;

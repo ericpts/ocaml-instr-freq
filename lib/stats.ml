@@ -33,10 +33,11 @@ let print_most_popular_classes
     ~n_most_frequent_equivalences
     ~n_real_blocks_to_print
     ~block_print_mode
-    ~min_block_size =
+    ~min_block_size
+    ~matcher =
   let equivalences_to_print =
     List.take
-      (Index.equivalences_by_frequency index ~min_block_size)
+      (Index.equivalences_by_frequency index ~min_block_size ~matcher)
       n_most_frequent_equivalences
   in
   let remaining_to_print =
@@ -65,8 +66,7 @@ let print_most_popular_classes
           frequency
           (Utils.color Utils.Cyan file)
           (Utils.color Utils.Cyan fun_decl.fun_name);
-
-        Utils.print_block block ~block_print_mode;
+        Types.print_block block ~block_print_mode;
         printf "%!";
         let rem = n - 1 in
         if rem > 0 then

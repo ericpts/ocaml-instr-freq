@@ -94,7 +94,8 @@ let main
     ~block_print_mode
     ~min_block_size
     ~min_equivalence_class_size
-    ~count_equivalence_classes_of_each_size =
+    ~count_equivalence_classes_of_each_size
+    ~matcher_of_index =
   let index =
     if Sys.file_exists_exn index_file then (
       printf "Loading cached index from %s... %!" index_file;
@@ -103,9 +104,7 @@ let main
       index )
     else build_index files ~index_file
   in
-  Index.print_most_frequent index ~min_block_size
-    ~n_most_frequent_equivalences;
-
+  let matcher = Option.map matcher_of_index ~f:(fun f -> f index) in
   (* XCR gyorsh for : this is a nice way to add different patterns; consider
      separating it out a bit more and explosing a type for functions that
      return a pair of on_block and on_finish_iterations. What are the
@@ -117,7 +116,8 @@ let main
     if n_real_blocks_to_print > 0 then
       add_stat
         (Stats.print_most_popular_classes index ~n_real_blocks_to_print
-           ~n_most_frequent_equivalences ~block_print_mode ~min_block_size);
+           ~n_most_frequent_equivalences ~block_print_mode ~min_block_size
+           ~matcher);
 
     if count_equivalence_classes_of_each_size then
       add_stat (Stats.count_equivalence_classes_of_each_size ());
@@ -154,7 +154,7 @@ let main_command =
           (optional_with_default 5 int)
           ~doc:
             "n Print [n] actual blocks from the codebase for each \
-             equivalence class, instead of a synthetic reconstruction."
+             equivalence class."
       and n_most_frequent_equivalences =
         flag "-n-most-frequent-equivalences"
           (optional_with_default 10 int)
@@ -192,6 +192,21 @@ let main_command =
           (optional Filename.arg_type)
           ~doc:
             "list-file Treat each line of [list-file] as a file to process."
+      and matcher =
+        flag "-use-matcher"
+          (optional Filename.arg_type)
+          ~doc:
+            "sexp_matcher_file Print only symbolic blocks which match the \
+             given matcher."
+      in
+      let matcher_of_index =
+        Option.map matcher ~f:(fun matcher ->
+            printf "Loading matcher from create_args(%s)\n%!" matcher;
+            let create_args =
+              Sexp.load_sexp_conv_exn matcher
+                Index.Matcher.create_args_of_sexp
+            in
+            Index.Matcher.create create_args)
       in
       let block_print_mode =
         match print_blocks_as_assembly with
@@ -209,7 +224,7 @@ let main_command =
         main files ~index_file ~n_real_blocks_to_print
           ~n_most_frequent_equivalences ~block_print_mode ~min_block_size
           ~min_equivalence_class_size
-          ~count_equivalence_classes_of_each_size]
+          ~count_equivalence_classes_of_each_size ~matcher_of_index]
 ;;
 
 let () = Command.run main_command
