@@ -16,11 +16,13 @@ module type Equivalence = sig
   val of_int : int -> t
 end
 
-module Register_equivalence : sig
-  type t
+module Register_equivalence : Equivalence
 
-  include Equivalence with type t := t
-end
+module Block_equivalence : Equivalence
+
+module Basic_instruction_equivalence : Equivalence
+
+module Terminator_instruction_equivalence : Equivalence
 
 module With_register_information : sig
   type 'a t = {
@@ -68,12 +70,6 @@ module Matcher : sig
   val create : create_args -> T.t -> t
 end
 
-module Block_equivalence : sig
-  type t [@@deriving compare, hash, sexp]
-
-  val to_int : t -> int
-end
-
 val empty : unit -> t
 
 val update : t -> Cfg.block -> unit
@@ -92,5 +88,4 @@ val equivalences_by_frequency :
   matcher:Matcher.t option ->
   Block_equivalence.t list
 
-(* XCR gyorsh for ericpts: what does "load" mean here? *)
 val print_hashtbl_load_statistics : t -> string

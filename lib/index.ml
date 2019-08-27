@@ -11,27 +11,9 @@ module type Equivalence = sig
   val of_int : int -> t
 end
 
-module Block_equivalence : sig
-  type t
-
-  include Equivalence with type t := t
-end =
-  Int
-
-module Basic_instruction_equivalence : sig
-  type t
-
-  include Equivalence with type t := t
-end =
-  Int
-
-module Terminator_instruction_equivalence : sig
-  type t
-
-  include Equivalence with type t := t
-end =
-  Int
-
+module Block_equivalence = Int
+module Basic_instruction_equivalence = Int
+module Terminator_instruction_equivalence = Int
 module Register_equivalence = Int
 
 let get_id_or_add ~equivalence_of_int hashtbl key =
