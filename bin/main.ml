@@ -201,7 +201,11 @@ let main_command =
           (optional Filename.arg_type)
           ~doc:
             "sexp_matcher_file Print only symbolic blocks which match the \
-             given matcher."
+             given matcher.\n\
+            \          Example of contents:\n\
+            \   ((with_these_basics ((((desc (Op Move)) (arg (0)) (res \
+             (1))) ((desc (Op Spill)) (arg (1)) (res (2)))))) \
+             (with_this_terminator ()))\n\n\n"
       in
       let matcher_of_index =
         Option.map matcher ~f:(fun matcher ->
