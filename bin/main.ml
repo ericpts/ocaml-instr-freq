@@ -173,7 +173,7 @@ let main_command =
           (optional_with_default 10 int)
           ~doc:"n Print most frequent equivalence classes"
       and block_print_mode =
-        flag "-print-block-as-assembly"
+        flag "-block-print-mode"
           (required block_print_mode_arg)
           ~doc:
             "repr Which representatin to print blocks in. Must be one of \
