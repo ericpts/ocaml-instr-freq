@@ -30,3 +30,6 @@ val print_most_popular_classes :
   t
 
 val count_equivalence_classes_of_each_size : unit -> t
+
+val count_blocks_matching :
+  Index.t -> min_block_size:int -> matcher:Index.Matcher.t option -> t

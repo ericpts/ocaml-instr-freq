@@ -136,8 +136,8 @@ module Symbolic_block = struct
 
     let of_block_generic
         (b : Cfg.block) ~get_id_for_basic ~get_id_for_terminator =
+      let register_index = Hashtbl.create (module String) in
       let symbolize_registers_of instr =
-        let register_index = Hashtbl.create (module String) in
         let symbolize_register register =
           get_id_or_add ~equivalence_of_int:Register_equivalence.of_int
             register_index
@@ -145,7 +145,7 @@ module Symbolic_block = struct
                ~include_register_number:true)
         in
         let arg = Array.map instr.Cfg.arg ~f:symbolize_register in
-        let res = Array.map instr.arg ~f:symbolize_register in
+        let res = Array.map instr.res ~f:symbolize_register in
         (arg, res)
       in
       let basics =
@@ -244,6 +244,19 @@ module Matcher = struct
   ;;
 
   let matches (t : t) (symbolic_block : Symbolic_block.t) =
+    (* We can think of this matching problem as substring search: [ t ]
+       contains the pattern, [ symbolic_block ] contains the large string,
+       and we want to see if the pattern appears in the large string.
+
+       The instruction id's are the same, however registers are numbered
+       from the start of the [ symbolic_block ]: each register is given an
+       id, which pretty much corresponds to the first time when we
+       encountered it. As such, if an instruction appears in the middle of
+       the block, then probably its registers will have high ids.
+
+       Therefore, in order to check if the pattern matches a substring of
+       [symbolic_block], we first need to renumber the registers of that
+       substring. *)
     let renumber instructions =
       let register_index = Hashtbl.create (module Int) in
       let renumber_registers registers =

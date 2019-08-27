@@ -11,18 +11,20 @@ let chain_compare list =
 ;;
 
 module Modulo_register_renaming = struct
-  let symbolize_register (reg : Reg.t) ~(include_register_number : bool) =
+  let symbolize_register (reg : Reg.t) ~include_register_number =
+    let maybe_number string num =
+      match include_register_number with
+      | true -> sprintf "%s#%d" string num
+      | false -> string
+    in
     match reg.Reg.loc with
     | Reg.Unknown -> "unknown"
-    | Reg.Reg num -> (
-        match include_register_number with
-        | true -> sprintf "reg#%d" num
-        | false -> "reg" )
+    | Reg.Reg num -> maybe_number "reg" num
     | Stack location -> (
         match location with
-        | Local _ -> "stack#local"
-        | Incoming _ -> "stack#incoming"
-        | Outgoing _ -> "stack#outgoing" )
+        | Local num -> maybe_number "stack#local" num
+        | Incoming num -> maybe_number "stack#incoming" num
+        | Outgoing num -> maybe_number "stack#outgoing" num )
   ;;
 end
 
@@ -340,13 +342,24 @@ let emit_assembly (block : Cfg.block) =
 let print_block (block : Cfg.block) ~block_print_mode =
   print_endline (Utils.color Green (sprintf "Block %d: {" block.start));
 
+  let print_registers registers =
+    Array.map registers
+      ~f:
+        (Modulo_register_renaming.symbolize_register
+           ~include_register_number:true)
+  in
   ( match block_print_mode with
   | `As_assembly -> emit_assembly block
   | `As_cfg ->
       List.iter block.body ~f:(fun instruction ->
-          printf !"\t%{sexp:From_cfg.basic};\n" instruction.desc);
+          printf
+            !"%{sexp:From_cfg.basic}: Arg%{sexp:string array} \
+              Res%{sexp:string array}\n"
+            instruction.desc
+            (print_registers instruction.arg)
+            (print_registers instruction.res));
 
-      printf !"\t#-%{sexp:From_cfg.terminator}-#\n" block.terminator.desc );
+      printf !"#-%{sexp:From_cfg.terminator}-#\n" block.terminator.desc );
 
   print_endline (Utils.color Green "}")
 ;;

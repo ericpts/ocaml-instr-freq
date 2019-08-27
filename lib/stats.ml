@@ -41,19 +41,22 @@ let print_most_popular_classes
       n_most_frequent_equivalences
   in
   let remaining_to_print =
-    match
-      Hashtbl.create_mapped
-        (module Index.Block_equivalence)
-        ~get_key:Fn.id
-        ~get_data:(Fn.const n_real_blocks_to_print)
-        equivalences_to_print
-    with
-    | `Ok hashtbl -> hashtbl
-    | `Duplicate_keys list ->
-        failwithf
-          !"Received unexpected duplicated equivalence indices: %{sexp: \
-            Index.Block_equivalence.t list} "
-          list ()
+    if n_real_blocks_to_print = 0 then
+      Hashtbl.create (module Index.Block_equivalence)
+    else
+      match
+        Hashtbl.create_mapped
+          (module Index.Block_equivalence)
+          ~get_key:Fn.id
+          ~get_data:(Fn.const n_real_blocks_to_print)
+          equivalences_to_print
+      with
+      | `Ok hashtbl -> hashtbl
+      | `Duplicate_keys list ->
+          failwithf
+            !"Received unexpected duplicated equivalence indices: %{sexp: \
+              Index.Block_equivalence.t list} "
+            list ()
   in
   let on_block
       ~file ~equivalence ~frequency block (fun_decl : Linear.fundecl) =
@@ -61,7 +64,7 @@ let print_most_popular_classes
     | None -> `Continue
     | Some n ->
         printf
-          "Equivalence %d with %d members;\n\tfile: %s\n\tfunction: %s\n"
+          "Equivalence <%d> with %d members;\n\tfile: %s\n\tfunction: %s\n"
           (Index.Block_equivalence.to_int equivalence)
           frequency
           (Utils.color Utils.Cyan file)
@@ -93,5 +96,24 @@ let count_equivalence_classes_of_each_size () =
         %{sexp: (int, int) Hashtbl.t}\n"
       equivalence_classes_of_each_size
   in
+  { on_block; on_finish_iteration }
+;;
+
+let count_blocks_matching index ~min_block_size ~matcher =
+  let matching_equivalences =
+    Index.equivalences_by_frequency index ~min_block_size ~matcher
+  in
+  let total_blocks =
+    List.sum
+      (module Int)
+      matching_equivalences
+      ~f:(fun equivalence -> Index.frequency_exn index equivalence)
+  in
+  printf "There are a total of %d blocks matching the query criteria.\n%!"
+    total_blocks;
+  let on_block ~file:_ ~equivalence:_ ~frequency:_ _fun_decl _block =
+    `Stop
+  in
+  let on_finish_iteration () = () in
   { on_block; on_finish_iteration }
 ;;

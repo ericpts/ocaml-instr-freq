@@ -80,7 +80,9 @@ let build_index files ~(index_file : Filename.t) =
       fprintf f "\tblocks: total %d; mean/function %f; max/function %d \n"
         (sum blocks) (mean blocks) (max blocks);
       fprintf f "\tinstructions: total %d; mean/block %f; max/block %d\n"
-        (sum instructions) (mean instructions) (max instructions));
+        (sum instructions) (mean instructions) (max instructions);
+      fprintf f "Index statistics: %s\n"
+        (Index.print_hashtbl_load_statistics index));
   index
 ;;
 
@@ -113,6 +115,8 @@ let main
   let { Stats.on_block; on_finish_iteration } =
     let statistics = ref [] in
     let add_stat stat = statistics := stat :: !statistics in
+    add_stat (Stats.count_blocks_matching index ~min_block_size ~matcher);
+
     if n_real_blocks_to_print > 0 then
       add_stat
         (Stats.print_most_popular_classes index ~n_real_blocks_to_print
