@@ -311,7 +311,12 @@ module From_cfg = struct
   ;;
 end
 
-let emit_assembly (block : Cfg.block) =
+type block_print_mode =
+  | As_assembly
+  | As_cfg
+  | Both
+
+let print_assembly (block : Cfg.block) =
   let terminator =
     Cfg_builder.linearize_terminator block.terminator
       ~next:Cfg_builder.labelled_insn_end
@@ -339,27 +344,32 @@ let emit_assembly (block : Cfg.block) =
     (Some (X86_gas.generate_asm !Emitaux.output_channel))
 ;;
 
-let print_block (block : Cfg.block) ~block_print_mode =
-  print_endline (Utils.color Green (sprintf "Block %d: {" block.start));
-
+let print_cfg (block : Cfg.block) =
   let print_registers registers =
     Array.map registers
       ~f:
         (Modulo_register_renaming.symbolize_register
            ~include_register_number:true)
   in
+  List.iter block.body ~f:(fun instruction ->
+      printf
+        !"%{sexp:From_cfg.basic}: Arg%{sexp:string array} Res%{sexp:string \
+          array}\n"
+        instruction.desc
+        (print_registers instruction.arg)
+        (print_registers instruction.res));
+
+  printf !"#-%{sexp:From_cfg.terminator}-#\n" block.terminator.desc
+;;
+
+let print_block (block : Cfg.block) ~(block_print_mode : block_print_mode) =
+  print_endline (Utils.color Green (sprintf "Block %d: {" block.start));
   ( match block_print_mode with
-  | `As_assembly -> emit_assembly block
-  | `As_cfg ->
-      List.iter block.body ~f:(fun instruction ->
-          printf
-            !"%{sexp:From_cfg.basic}: Arg%{sexp:string array} \
-              Res%{sexp:string array}\n"
-            instruction.desc
-            (print_registers instruction.arg)
-            (print_registers instruction.res));
-
-      printf !"#-%{sexp:From_cfg.terminator}-#\n" block.terminator.desc );
-
+  | As_assembly -> print_assembly block
+  | As_cfg -> print_cfg block
+  | Both ->
+      print_assembly block;
+      print_endline (Utils.color Green (String.make 10 '='));
+      print_cfg block );
   print_endline (Utils.color Green "}")
 ;;

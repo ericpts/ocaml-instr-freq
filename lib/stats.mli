@@ -24,7 +24,7 @@ val print_most_popular_classes :
   Index.t ->
   n_most_frequent_equivalences:int ->
   n_real_blocks_to_print:int ->
-  block_print_mode:[< `As_assembly | `As_cfg ] ->
+  block_print_mode:Types.block_print_mode ->
   min_block_size:int ->
   matcher:Index.Matcher.t option ->
   t

@@ -146,6 +146,15 @@ let main
   on_finish_iteration ()
 ;;
 
+let block_print_mode_arg =
+  Command.Arg_type.create (fun mode ->
+      match String.lowercase mode with
+      | "asm" -> Types.As_assembly
+      | "cfg" -> Types.As_cfg
+      | "both" -> Types.Both
+      | _ -> failwithf "Invalid block_print_mode argument: %s" mode ())
+;;
+
 let main_command =
   Command.basic ~summary:"Count frequency of basic blocks."
     ~readme:(fun () ->
@@ -163,9 +172,12 @@ let main_command =
         flag "-n-most-frequent-equivalences"
           (optional_with_default 10 int)
           ~doc:"n Print most frequent equivalence classes"
-      and print_blocks_as_assembly =
-        flag "-print-block-as-assembly" no_arg
-          ~doc:"Print blocks as assembly instead of cfg format"
+      and block_print_mode =
+        flag "-print-block-as-assembly"
+          (required block_print_mode_arg)
+          ~doc:
+            "repr Which representatin to print blocks in. Must be one of \
+             [asm | cfg | both]"
       and min_block_size =
         flag "-min-block-size"
           (optional_with_default 5 int)
@@ -215,11 +227,6 @@ let main_command =
                 Index.Matcher.create_args_of_sexp
             in
             Index.Matcher.create create_args)
-      in
-      let block_print_mode =
-        match print_blocks_as_assembly with
-        | true -> `As_assembly
-        | false -> `As_cfg
       in
       let files =
         anon_files
