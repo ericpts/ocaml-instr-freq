@@ -354,10 +354,14 @@ let print_cfg (block : Cfg.block) =
   List.iter block.body ~f:(fun instruction ->
       printf
         !"%{sexp:From_cfg.basic}: Arg%{sexp:string array} Res%{sexp:string \
-          array}\n"
+          array} Live%{sexp: string array}\n"
         instruction.desc
         (print_registers instruction.arg)
-        (print_registers instruction.res));
+        (print_registers instruction.res)
+        (print_registers
+           ( Reg.Set.to_seq instruction.live
+           |> Seq.fold_left (fun x a -> a :: x) []
+           |> Array.of_list )));
 
   printf !"#-%{sexp:From_cfg.terminator}-#\n" block.terminator.desc
 ;;

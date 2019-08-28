@@ -64,8 +64,9 @@ let print_most_popular_classes
     | None -> `Continue
     | Some n ->
         printf
-          "Equivalence <%d> with %d members;\n\tfile: %s\n\tfunction: %s\n"
-          (Index.Block_equivalence.to_int equivalence)
+          "Equivalence %s with %d members;\n\tfile: %s\n\tfunction: %s\n"
+          ( sprintf "<%d>" (Index.Block_equivalence.to_int equivalence)
+          |> Utils.color Cyan )
           frequency
           (Utils.color Utils.Cyan file)
           (Utils.color Utils.Cyan fun_decl.fun_name);
