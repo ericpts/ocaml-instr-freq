@@ -27,3 +27,5 @@ let color basic_color text =
   let number = basic_color_to_int basic_color in
   Printf.sprintf "\027[38;5;%dm%s\027[0m" number text
 ;;
+
+exception Stop_iteration

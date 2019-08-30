@@ -22,25 +22,46 @@ let eprintf_progress fmt =
     fmt
 ;;
 
-let read_file (file : Filename.t) =
+let read_file (file : Filename.t) ~context_length =
+  let rec generate_context_for_block (block : Cfg.block) cfg_builder context
+      =
+    match context with
+    | 0 -> [| Loop_free_block.create block |]
+    | _ ->
+        Array.concat_map
+          (Cfg.LabelSet.elements block.predecessors |> Array.of_list)
+          ~f:(fun label ->
+            let previous_block =
+              Cfg_builder.get_block cfg_builder label |> Option.value_exn
+            in
+            Array.map
+              (generate_context_for_block previous_block cfg_builder
+                 (context - 1))
+              ~f:(fun predecessor ->
+                Loop_free_block.append_successor predecessor block))
+  in
   let open Linear_format in
   let ui, _ = restore file in
   List.filter_map ui.items ~f:(fun item ->
       match item with
       | Func f ->
           let cfg_builder =
-            Cfg_builder.from_linear f ~preserve_orig_labels:false
+            Cfg_builder.from_linear f ~preserve_orig_labels:true
           in
           let layout = Cfg_builder.get_layout cfg_builder in
           let blocks =
-            List.map layout ~f:(fun label ->
-                Cfg_builder.get_block cfg_builder label |> Option.value_exn)
+            Array.concat_map (Array.of_list layout) ~f:(fun label ->
+                let block =
+                  Cfg_builder.get_block cfg_builder label
+                  |> Option.value_exn
+                in
+                generate_context_for_block block cfg_builder context_length)
           in
           Some (f, blocks)
       | Data _ -> None)
 ;;
 
-let build_index files ~(index_file : Filename.t) =
+let build_index files ~(index_file : Filename.t) ~context_length =
   let total_number_of_files = List.length files in
   printf "Building the index...\n%!";
   let index = Index.empty () in
@@ -48,17 +69,20 @@ let build_index files ~(index_file : Filename.t) =
   let blocks_per_function = ref [] in
   let instructions_per_block = ref [] in
   List.iteri files ~f:(fun ifile file ->
+      if ifile % 5000 = 0 then Gc.compact ();
       eprintf_progress "Processing file %d/%d; Index load: %s \r" ifile
         total_number_of_files
         (Index.print_hashtbl_load_statistics index);
-      let functions = read_file file in
+      let functions = read_file file ~context_length in
       functions_per_file := List.length functions :: !functions_per_file;
+
       List.iter functions ~f:(fun (_fun_decl, blocks) ->
-          blocks_per_function := List.length blocks :: !blocks_per_function;
-          List.iter blocks ~f:(fun block ->
+          blocks_per_function := Array.length blocks :: !blocks_per_function;
+          Array.iter blocks ~f:(fun block ->
               Index.update index block;
               instructions_per_block :=
-                (List.length block.body + 1) :: !instructions_per_block)));
+                (Loop_free_block.to_list block |> List.length)
+                :: !instructions_per_block)));
   let () = Index.to_file index ~filename:index_file in
   let sum nums = List.sum (module Int) nums ~f:Fn.id in
   let mean nums =
@@ -86,8 +110,6 @@ let build_index files ~(index_file : Filename.t) =
   index
 ;;
 
-exception Stop_iteration
-
 let main
     files
     ~index_file
@@ -96,15 +118,15 @@ let main
     ~block_print_mode
     ~min_block_size
     ~min_equivalence_class_size
-    ~count_equivalence_classes_of_each_size
-    ~matcher_of_index =
+    ~matcher_of_index
+    ~context_length =
   let index =
     if Sys.file_exists_exn index_file then (
       printf "Loading cached index from %s... %!" index_file;
       let index = Index.of_file ~filename:index_file in
       printf "loaded!\n%!";
       index )
-    else build_index files ~index_file
+    else build_index files ~index_file ~context_length
   in
   let matcher = Option.map matcher_of_index ~f:(fun f -> f index) in
   (* XCR gyorsh for : this is a nice way to add different patterns; consider
@@ -123,35 +145,36 @@ let main
            ~n_most_frequent_equivalences ~block_print_mode ~min_block_size
            ~matcher);
 
-    if count_equivalence_classes_of_each_size then
-      add_stat (Stats.count_equivalence_classes_of_each_size ());
-
     Stats.combine !statistics
   in
   ( try
       List.iter files ~f:(fun file ->
-          List.iter (read_file file) ~f:(fun (fun_decl, blocks) ->
-              List.iter blocks ~f:(fun block ->
-                  if List.length block.body + 1 >= min_block_size then
+          List.iter (read_file file ~context_length)
+            ~f:(fun (fundecl, blocks) ->
+              Array.iter blocks ~f:(fun block ->
+                  if
+                    List.length (Loop_free_block.to_list block)
+                    >= min_block_size
+                  then
                     let equivalence = Index.equivalence_exn index block in
                     let frequency = Index.frequency_exn index equivalence in
                     if frequency >= min_equivalence_class_size then
                       match
-                        on_block ~file ~equivalence ~frequency block
-                          fun_decl
+                        on_block block ~file ~equivalence ~frequency
+                          ~fundecl
                       with
                       | `Continue -> ()
-                      | `Stop -> raise Stop_iteration)))
-    with Stop_iteration -> () );
+                      | `Stop -> raise Utils.Stop_iteration)))
+    with Utils.Stop_iteration -> () );
   on_finish_iteration ()
 ;;
 
 let block_print_mode_arg =
   Command.Arg_type.create (fun mode ->
       match String.lowercase mode with
-      | "asm" -> Types.As_assembly
-      | "cfg" -> Types.As_cfg
-      | "both" -> Types.Both
+      | "asm" -> Loop_free_block.As_assembly
+      | "cfg" -> Loop_free_block.As_cfg
+      | "both" -> Loop_free_block.Both
       | _ -> failwithf "Invalid block_print_mode argument: %s" mode ())
 ;;
 
@@ -185,12 +208,6 @@ let main_command =
             "n Only report equivalence classes, for which the \
              representative block has at least [n] instructions (including \
              the terminator)."
-      and count_equivalence_classes_of_each_size =
-        flag "-count-equivalence-classes-of-each-size" no_arg
-          ~doc:
-            "Report statistics of the form \
-             (number_of_members_in_equivalence_class, equivalence classes \
-             with this many members). Might take a long time."
       and min_equivalence_class_size =
         flag "-min-equivalence-class-size"
           (optional_with_default 5 int)
@@ -218,15 +235,25 @@ let main_command =
             \   ((with_these_basics ((((desc (Op Move)) (arg (0)) (res \
              (1))) ((desc (Op Spill)) (arg (1)) (res (2)))))) \
              (with_this_terminator ()))\n\n\n"
+      and context_length =
+        flag "-context-length"
+          (optional_with_default 0 int)
+          ~doc:
+            "context How much context to include when building the index. \
+             From the CFG graph,we will take chains of length [context] \
+             and treat them as single blocks.This options permits us to \
+             look at more instructions and gain better insight, however \
+             the worst-case running time is exponential in this parameter."
       in
       let matcher_of_index =
         Option.map matcher ~f:(fun matcher ->
             printf "Loading matcher from create_args(%s)\n%!" matcher;
-            let create_args =
-              Sexp.load_sexp_conv_exn matcher
-                Index.Matcher.create_args_of_sexp
+            let instructions =
+              Sexp.load_sexps_conv_exn matcher
+                [%of_sexp:
+                  Index.Matcher.desc Index.With_register_information.t]
             in
-            Index.Matcher.create create_args)
+            Index.Matcher.create instructions)
       in
       let files =
         anon_files
@@ -238,8 +265,7 @@ let main_command =
       fun () ->
         main files ~index_file ~n_real_blocks_to_print
           ~n_most_frequent_equivalences ~block_print_mode ~min_block_size
-          ~min_equivalence_class_size
-          ~count_equivalence_classes_of_each_size ~matcher_of_index]
+          ~min_equivalence_class_size ~matcher_of_index ~context_length]
 ;;
 
 let () = Command.run main_command

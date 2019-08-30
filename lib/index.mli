@@ -1,5 +1,6 @@
 open! Core
 open Ocamlcfg
+open Equivalence
 
 (* An index is a collection of equivalence classes *)
 module T : sig
@@ -8,29 +9,13 @@ end
 
 type t = T.t
 
-module type Equivalence = sig
-  type t [@@deriving compare, hash, sexp, equal]
-
-  val to_int : t -> int
-
-  val of_int : int -> t
-end
-
-module Register_equivalence : Equivalence
-
-module Block_equivalence : Equivalence
-
-module Basic_instruction_equivalence : Equivalence
-
-module Terminator_instruction_equivalence : Equivalence
-
 module With_register_information : sig
   type 'a t = {
     desc : 'a;
     arg : Register_equivalence.t array;
     res : Register_equivalence.t array;
   }
-  [@@deriving compare, sexp_of, equal]
+  [@@deriving compare, sexp, equal]
 end
 
 (* In case we are considering applying a peephole optimization, we want to
@@ -45,10 +30,9 @@ end
 module Matcher : sig
   type t
 
-  type create_args = {
-    with_these_basics : Cfg.basic With_register_information.t list option;
-    with_this_terminator : Cfg.terminator With_register_information.t option;
-  }
+  type desc =
+    | Basic of Cfg.basic
+    | Terminator of Cfg.terminator
   [@@deriving sexp]
 
   (* With_reg_information.t is used to enforce that two instructions operate
@@ -62,19 +46,15 @@ module Matcher : sig
      In this case, (arg, res) of the two instructions should contain the
      same values. Should you wish to enforce that the instructions operate
      on distinct registers, supply different integers to the (arg, res)
-     fields.
-
-     For now, there is no connection between the basics registers and the
-     terminator registers (i.e, when matching for the terminator, we do not
-     look at the basic registers). *)
-  val create : create_args -> T.t -> t
+     fields. *)
+  val create : desc With_register_information.t list -> T.t -> t
 end
 
 val empty : unit -> t
 
-val update : t -> Cfg.block -> unit
+val update : t -> Loop_free_block.t -> unit
 
-val equivalence_exn : t -> Cfg.block -> Block_equivalence.t
+val equivalence_exn : t -> Loop_free_block.t -> Block_equivalence.t
 
 val frequency_exn : t -> Block_equivalence.t -> int
 

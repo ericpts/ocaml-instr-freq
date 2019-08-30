@@ -1,4 +1,4 @@
-open Ocamlcfg
+open Equivalence
 
 (* These statistics are ran over all of the code.
 
@@ -9,11 +9,11 @@ open Ocamlcfg
    should not depend on that. *)
 type t = {
   on_block :
+    Loop_free_block.t ->
     file:string ->
-    equivalence:Index.Block_equivalence.t ->
+    equivalence:Block_equivalence.t ->
     frequency:int ->
-    Cfg.block ->
-    Linear.fundecl ->
+    fundecl:Linear.fundecl ->
     [ `Stop | `Continue ];
   on_finish_iteration : unit -> unit;
 }
@@ -24,12 +24,10 @@ val print_most_popular_classes :
   Index.t ->
   n_most_frequent_equivalences:int ->
   n_real_blocks_to_print:int ->
-  block_print_mode:Types.block_print_mode ->
+  block_print_mode:Loop_free_block.block_print_mode ->
   min_block_size:int ->
   matcher:Index.Matcher.t option ->
   t
-
-val count_equivalence_classes_of_each_size : unit -> t
 
 val count_blocks_matching :
   Index.t -> min_block_size:int -> matcher:Index.Matcher.t option -> t
