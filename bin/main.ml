@@ -152,19 +152,14 @@ let main
           List.iter (read_file file ~context_length)
             ~f:(fun (fundecl, blocks) ->
               Array.iter blocks ~f:(fun block ->
-                  if
-                    List.length (Loop_free_block.to_list block)
-                    >= min_block_size
-                  then
-                    let equivalence = Index.equivalence_exn index block in
-                    let frequency = Index.frequency_exn index equivalence in
-                    if frequency >= min_equivalence_class_size then
-                      match
-                        on_block block ~file ~equivalence ~frequency
-                          ~fundecl
-                      with
-                      | `Continue -> ()
-                      | `Stop -> raise Utils.Stop_iteration)))
+                  let equivalence = Index.equivalence_exn index block in
+                  let frequency = Index.frequency_exn index equivalence in
+                  if frequency >= min_equivalence_class_size then
+                    match
+                      on_block block ~file ~equivalence ~frequency ~fundecl
+                    with
+                    | `Continue -> ()
+                    | `Stop -> raise Utils.Stop_iteration)))
     with Utils.Stop_iteration -> () );
   on_finish_iteration ()
 ;;
