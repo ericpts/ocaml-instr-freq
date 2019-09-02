@@ -1,0 +1,10 @@
+(test
+ (name test)
+ (libraries
+  core
+  ocamlcfg
+  instr_freq
+  async
+ )
+ (preprocess (pps ppx_jane ppx_assert ppx_expect))
+ )

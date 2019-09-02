@@ -135,3 +135,41 @@ let print (t : t) (block_print_mode : block_print_mode) =
       print_cfg t );
   print_endline (Utils.color Green "}")
 ;;
+
+let read_file ~(file : Filename.t) ~context_length =
+  let rec generate_context_for_block (block : Cfg.block) cfg_builder context
+      =
+    match context with
+    | 0 -> [| create block |]
+    | _ ->
+        Array.concat_map
+          (Cfg.LabelSet.elements block.predecessors |> Array.of_list)
+          ~f:(fun label ->
+            let previous_block =
+              Cfg_builder.get_block cfg_builder label |> Option.value_exn
+            in
+            Array.map
+              (generate_context_for_block previous_block cfg_builder
+                 (context - 1))
+              ~f:(fun predecessor -> append_successor predecessor block))
+  in
+  let open Linear_format in
+  let ui, _ = restore file in
+  List.filter_map ui.items ~f:(fun item ->
+      match item with
+      | Func f ->
+          let cfg_builder =
+            Cfg_builder.from_linear f ~preserve_orig_labels:true
+          in
+          let layout = Cfg_builder.get_layout cfg_builder in
+          let blocks =
+            Array.concat_map (Array.of_list layout) ~f:(fun label ->
+                let block =
+                  Cfg_builder.get_block cfg_builder label
+                  |> Option.value_exn
+                in
+                generate_context_for_block block cfg_builder context_length)
+          in
+          Some (f, blocks)
+      | Data _ -> None)
+;;

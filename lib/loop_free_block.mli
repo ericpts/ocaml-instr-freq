@@ -14,3 +14,6 @@ type block_print_mode =
   | Both
 
 val print : t -> block_print_mode -> unit
+
+val read_file :
+  file:string -> context_length:int -> (Linear.fundecl * t Array.t) List.t

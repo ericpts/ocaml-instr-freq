@@ -68,4 +68,10 @@ val equivalences_by_frequency :
   matcher:Matcher.t option ->
   Block_equivalence.t list
 
-val print_hashtbl_load_statistics : t -> string
+type hashtbl_load_statistics = {
+  n_symbolic_blocks : int;
+  n_basic_instructions : int;
+  n_terminator_instructions : int;
+}
+
+val hashtbl_load_statistics : t -> hashtbl_load_statistics

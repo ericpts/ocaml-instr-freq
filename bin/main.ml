@@ -1,5 +1,4 @@
 open Core
-open Ocamlcfg
 open Instr_freq
 
 let start = Time.now ()
@@ -22,45 +21,6 @@ let eprintf_progress fmt =
     fmt
 ;;
 
-let read_file (file : Filename.t) ~context_length =
-  let rec generate_context_for_block (block : Cfg.block) cfg_builder context
-      =
-    match context with
-    | 0 -> [| Loop_free_block.create block |]
-    | _ ->
-        Array.concat_map
-          (Cfg.LabelSet.elements block.predecessors |> Array.of_list)
-          ~f:(fun label ->
-            let previous_block =
-              Cfg_builder.get_block cfg_builder label |> Option.value_exn
-            in
-            Array.map
-              (generate_context_for_block previous_block cfg_builder
-                 (context - 1))
-              ~f:(fun predecessor ->
-                Loop_free_block.append_successor predecessor block))
-  in
-  let open Linear_format in
-  let ui, _ = restore file in
-  List.filter_map ui.items ~f:(fun item ->
-      match item with
-      | Func f ->
-          let cfg_builder =
-            Cfg_builder.from_linear f ~preserve_orig_labels:true
-          in
-          let layout = Cfg_builder.get_layout cfg_builder in
-          let blocks =
-            Array.concat_map (Array.of_list layout) ~f:(fun label ->
-                let block =
-                  Cfg_builder.get_block cfg_builder label
-                  |> Option.value_exn
-                in
-                generate_context_for_block block cfg_builder context_length)
-          in
-          Some (f, blocks)
-      | Data _ -> None)
-;;
-
 let build_index files ~(index_file : Filename.t) ~context_length =
   let total_number_of_files = List.length files in
   printf "Building the index...\n%!";
@@ -70,10 +30,20 @@ let build_index files ~(index_file : Filename.t) ~context_length =
   let instructions_per_block = ref [] in
   List.iteri files ~f:(fun ifile file ->
       if ifile % 5000 = 0 then Gc.compact ();
-      eprintf_progress "Processing file %d/%d; Index load: %s \r" ifile
-        total_number_of_files
-        (Index.print_hashtbl_load_statistics index);
-      let functions = read_file file ~context_length in
+      let () =
+        let { Index.n_symbolic_blocks;
+              n_basic_instructions;
+              n_terminator_instructions
+            } =
+          Index.hashtbl_load_statistics index
+        in
+        eprintf_progress
+          "Processing file %d/%d; Index load: Symbolic_blocks: %d; \
+           Instructions: (basic: %d) (terminator: %d) \r"
+          ifile total_number_of_files n_symbolic_blocks n_basic_instructions
+          n_terminator_instructions
+      in
+      let functions = Loop_free_block.read_file ~file ~context_length in
       functions_per_file := List.length functions :: !functions_per_file;
 
       List.iter functions ~f:(fun (_fun_decl, blocks) ->
@@ -105,8 +75,12 @@ let build_index files ~(index_file : Filename.t) ~context_length =
         (sum blocks) (mean blocks) (max blocks);
       fprintf f "\tinstructions: total %d; mean/block %f; max/block %d\n"
         (sum instructions) (mean instructions) (max instructions);
-      fprintf f "Index statistics: %s\n"
-        (Index.print_hashtbl_load_statistics index));
+      let index_stats = Index.hashtbl_load_statistics index in
+      fprintf f
+        "Index statistics: Symbolic_blocks: %d; Basic_instructions: %d; \
+         Terminator instructions: %d\n"
+        index_stats.n_symbolic_blocks index_stats.n_basic_instructions
+        index_stats.n_terminator_instructions);
   index
 ;;
 
@@ -149,7 +123,7 @@ let main
   in
   ( try
       List.iter files ~f:(fun file ->
-          List.iter (read_file file ~context_length)
+          List.iter (Loop_free_block.read_file ~file ~context_length)
             ~f:(fun (fundecl, blocks) ->
               Array.iter blocks ~f:(fun block ->
                   let equivalence = Index.equivalence_exn index block in
@@ -225,11 +199,7 @@ let main_command =
           (optional Filename.arg_type)
           ~doc:
             "sexp_matcher_file Print only symbolic blocks which match the \
-             given matcher.\n\
-            \          Example of contents:\n\
-            \   ((with_these_basics ((((desc (Op Move)) (arg (0)) (res \
-             (1))) ((desc (Op Spill)) (arg (1)) (res (2)))))) \
-             (with_this_terminator ()))\n\n\n"
+             given matcher."
       and context_length =
         flag "-context-length"
           (optional_with_default 0 int)
@@ -242,7 +212,7 @@ let main_command =
       in
       let matcher_of_index =
         Option.map matcher ~f:(fun matcher ->
-            printf "Loading matcher from create_args(%s)\n%!" matcher;
+            printf "Loading matcher from %s\n%!" matcher;
             let instructions =
               Sexp.load_sexps_conv_exn matcher
                 [%of_sexp:

@@ -391,9 +391,17 @@ let equivalences_by_frequency t ~min_block_size ~matcher =
   |> List.map ~f:(fun e -> e.equivalence)
 ;;
 
-let print_hashtbl_load_statistics t =
-  sprintf "Symbolic_blocks: %d; Instructions: (basic: %d) (terminator: %d)"
-    (Hashtbl.length t.symbolic_block_index)
-    (Hashtbl.length t.instruction_index.for_basic)
-    (Hashtbl.length t.instruction_index.for_terminator)
+type hashtbl_load_statistics = {
+  n_symbolic_blocks : int;
+  n_basic_instructions : int;
+  n_terminator_instructions : int;
+}
+
+let hashtbl_load_statistics t =
+  {
+    n_symbolic_blocks = Hashtbl.length t.symbolic_block_index;
+    n_basic_instructions = Hashtbl.length t.instruction_index.for_basic;
+    n_terminator_instructions =
+      Hashtbl.length t.instruction_index.for_terminator;
+  }
 ;;
