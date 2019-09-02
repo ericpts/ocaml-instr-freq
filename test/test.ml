@@ -53,6 +53,16 @@ let build_index_for_fixture ~fixtures_directory ~context_length fixture_name
   (blocks, index)
 ;;
 
+let iter_blocks blocks ~index ~file ~statistics =
+  let { Stats.on_block; on_finish_iteration } = statistics in
+  List.iter blocks ~f:(fun (fundecl, loop_free_blocks) ->
+      Array.iter loop_free_blocks ~f:(fun block ->
+          let equivalence = Index.equivalence_exn index block in
+          let frequency = Index.frequency_exn index equivalence in
+          on_block block ~file ~equivalence ~frequency ~fundecl |> ignore));
+  on_finish_iteration ()
+;;
+
 let test_index_statistics ~fixtures_directory =
   let _blocks, index =
     build_index_for_fixture "simple" ~fixtures_directory ~context_length:0
@@ -69,11 +79,12 @@ let test_index_statistics ~fixtures_directory =
 ;;
 
 let test_matching_functionality ~fixtures_directory =
+  printf "test_matching_functionality\n";
   let blocks, index =
     build_index_for_fixture "simple" ~fixtures_directory ~context_length:0
   in
   let matcher = Some (matcher_for_move index) in
-  let { Stats.on_block; on_finish_iteration } =
+  let statistics =
     Stats.combine
       [ Stats.count_blocks_matching index ~min_block_size:0 ~matcher;
         Stats.print_most_popular_classes index ~n_real_blocks_to_print:1
@@ -82,21 +93,16 @@ let test_matching_functionality ~fixtures_directory =
           ~matcher
       ]
   in
-  List.iter blocks ~f:(fun (fundecl, loop_free_blocks) ->
-      Array.iter loop_free_blocks ~f:(fun block ->
-          let equivalence = Index.equivalence_exn index block in
-          let frequency = Index.frequency_exn index equivalence in
-          on_block block ~file:"simple.ml" ~equivalence ~frequency ~fundecl
-          |> ignore));
-  on_finish_iteration ()
+  iter_blocks blocks ~index ~file:"simple.ml" ~statistics
 ;;
 
-let test_index_repetitive ~fixtures_directory =
+let test_index_bigger_file ~fixtures_directory =
+  printf "test_index_bigger_file\n";
   let blocks, index =
     build_index_for_fixture "repetitive" ~fixtures_directory
       ~context_length:0
   in
-  let { Stats.on_block; on_finish_iteration } =
+  let statistics =
     Stats.combine
       [ Stats.print_most_popular_classes index ~n_real_blocks_to_print:1
           ~n_most_frequent_equivalences:1
@@ -104,20 +110,31 @@ let test_index_repetitive ~fixtures_directory =
           ~matcher:None
       ]
   in
-  List.iter blocks ~f:(fun (fundecl, loop_free_blocks) ->
-      Array.iter loop_free_blocks ~f:(fun block ->
-          let equivalence = Index.equivalence_exn index block in
-          let frequency = Index.frequency_exn index equivalence in
-          on_block block ~file:"repetitive.ml" ~equivalence ~frequency
-            ~fundecl
-          |> ignore));
-  on_finish_iteration ()
+  iter_blocks blocks ~index ~file:"repetitive.ml" ~statistics
+;;
+
+let test_index_context ~fixtures_directory =
+  printf "test_index_context\n";
+  let blocks, index =
+    build_index_for_fixture "repetitive" ~fixtures_directory
+      ~context_length:1
+  in
+  let statistics =
+    Stats.combine
+      [ Stats.print_most_popular_classes index ~n_real_blocks_to_print:1
+          ~n_most_frequent_equivalences:1
+          ~block_print_mode:Loop_free_block.Both ~min_block_size:6
+          ~matcher:None
+      ]
+  in
+  iter_blocks blocks ~index ~file:"repetitive.ml" ~statistics
 ;;
 
 let main ~fixtures_directory =
   test_index_statistics ~fixtures_directory;
   test_matching_functionality ~fixtures_directory;
-  test_index_repetitive ~fixtures_directory
+  test_index_bigger_file ~fixtures_directory;
+  test_index_context ~fixtures_directory
 ;;
 
 let () = main ~fixtures_directory:(find_fixtures_directory ())
