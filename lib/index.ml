@@ -164,6 +164,7 @@ module T = struct
     symbolic_block_index :
       (Symbolic_block.t, Block_equivalence.t) Hashtbl.t;
     mutable frequency : int Array.t;
+    mutable sample_file : Filename.t Array.t;
   }
 end
 
@@ -254,10 +255,16 @@ let empty () =
     instruction_index = Instruction_index.empty ();
     symbolic_block_index = Hashtbl.create (module Symbolic_block);
     frequency = Array.create ~len:200_000 0;
+    sample_file = Array.create ~len:200_000 "";
   }
 ;;
 
-let update t (loop_free_block : Loop_free_block.t) =
+let double_array arr ~default =
+  let n = Array.length arr in
+  Array.init (2 * n) ~f:(fun i -> if i < n then arr.(i) else default)
+;;
+
+let update ?source_file t (loop_free_block : Loop_free_block.t) =
   let symbolic_block =
     Symbolic_block.of_block loop_free_block t.instruction_index
   in
@@ -270,20 +277,12 @@ let update t (loop_free_block : Loop_free_block.t) =
     assert (
       Hashtbl.length t.symbolic_block_index = Array.length t.frequency + 1
     );
+    t.frequency <- double_array t.frequency ~default:0;
+    t.sample_file <- double_array t.sample_file ~default:"" );
 
-    (* XCR gyorsh for ericpts: Array.init would do it in one pass *)
-    let new_frequency =
-      let n = Array.length t.frequency in
-      for i = 0 to n - 1 do
-        (* We should have encountered at least one member of each
-           equivalence class up to this point. *)
-        assert (t.frequency.(i) >= 1)
-      done;
-      Array.init (2 * n) ~f:(fun i -> if i < n then t.frequency.(i) else 0)
-    in
-    t.frequency <- new_frequency );
-
-  t.frequency.(equivalence) <- t.frequency.(equivalence) + 1
+  t.frequency.(equivalence) <- t.frequency.(equivalence) + 1;
+  Option.iter source_file ~f:(fun file ->
+      t.sample_file.(equivalence) <- file)
 ;;
 
 let frequency_exn (t : t) (equivalence : Block_equivalence.t) =
@@ -310,6 +309,11 @@ let to_file t ~filename =
     (* Sanity check, that we did not somehow end up with a discontinuous
        frequency array. *)
     let n_classes = Hashtbl.length t.symbolic_block_index in
+    if n_classes = 0 then
+      failwith
+        "Index contains zero equivalence classes! Either the files are \
+         empty, or the context length is too large.";
+
     for i = 0 to n_classes - 1 do
       assert (t.frequency.(i) >= 1)
     done;
@@ -322,7 +326,8 @@ let to_file t ~filename =
     ( Hashtbl.to_alist t.instruction_index.for_basic,
       Hashtbl.to_alist t.instruction_index.for_terminator,
       Hashtbl.to_alist t.symbolic_block_index,
-      t.frequency )
+      t.frequency,
+      t.sample_file )
   in
   Out_channel.with_file ~binary:true filename ~f:(fun out_channel ->
       Marshal.to_channel out_channel as_alist [])
@@ -330,7 +335,11 @@ let to_file t ~filename =
 
 let of_file ~filename =
   In_channel.with_file ~binary:true filename ~f:(fun inc ->
-      let for_basic, for_terminator, symbolic_block_index, frequency =
+      let ( for_basic,
+            for_terminator,
+            symbolic_block_index,
+            frequency,
+            sample_file ) =
         Marshal.from_channel inc
       in
       {
@@ -348,6 +357,7 @@ let of_file ~filename =
           symbolic_block_index
           |> Hashtbl.of_alist_exn (module Symbolic_block);
         frequency;
+        sample_file;
       })
 ;;
 
@@ -404,4 +414,12 @@ let hashtbl_load_statistics t =
     n_terminator_instructions =
       Hashtbl.length t.instruction_index.for_terminator;
   }
+;;
+
+let sample_file t equivalence =
+  match
+    t.sample_file.(Equivalence.Block_equivalence.to_int equivalence)
+  with
+  | "" -> None
+  | x -> Some x
 ;;

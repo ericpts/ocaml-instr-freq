@@ -54,7 +54,9 @@ let build_index_for_fixture ~fixtures_directory ~context_length fixture_name
 ;;
 
 let iter_blocks blocks ~index ~file ~statistics =
-  let { Stats.on_block; on_finish_iteration } = statistics in
+  let { Stats.on_block; on_finish_iteration; hint_files = _ } =
+    statistics
+  in
   List.iter blocks ~f:(fun (fundecl, loop_free_blocks) ->
       Array.iter loop_free_blocks ~f:(fun block ->
           let equivalence = Index.equivalence_exn index block in

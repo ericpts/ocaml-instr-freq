@@ -10,6 +10,7 @@ type t = {
     fundecl:Linear.fundecl ->
     [ `Stop | `Continue ];
   on_finish_iteration : unit -> unit;
+  hint_files : String.Set.t;
 }
 
 let combine ts =
@@ -25,7 +26,10 @@ let combine ts =
   let on_finish_iteration () =
     List.iter ts ~f:(fun t -> t.on_finish_iteration ())
   in
-  { on_block; on_finish_iteration }
+  let hint_files =
+    String.Set.union_list (List.map ts ~f:(fun t -> t.hint_files))
+  in
+  { on_block; on_finish_iteration; hint_files }
 ;;
 
 let print_most_popular_classes
@@ -39,6 +43,11 @@ let print_most_popular_classes
     List.take
       (Index.equivalences_by_frequency index ~min_block_size ~matcher)
       n_most_frequent_equivalences
+  in
+  let hint_files =
+    List.filter_map equivalences_to_print ~f:(fun equivalence ->
+        Index.sample_file index equivalence)
+    |> String.Set.of_list
   in
   let remaining_to_print =
     if n_real_blocks_to_print = 0 then
@@ -79,7 +88,7 @@ let print_most_popular_classes
         if Hashtbl.length remaining_to_print > 0 then `Continue else `Stop
   in
   let on_finish_iteration () = () in
-  { on_block; on_finish_iteration }
+  { on_block; on_finish_iteration; hint_files }
 ;;
 
 let count_blocks_matching index ~min_block_size ~matcher =
@@ -98,5 +107,5 @@ let count_blocks_matching index ~min_block_size ~matcher =
     `Stop
   in
   let on_finish_iteration () = () in
-  { on_block; on_finish_iteration }
+  { on_block; on_finish_iteration; hint_files = String.Set.empty }
 ;;

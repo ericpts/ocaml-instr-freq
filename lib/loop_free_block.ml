@@ -96,6 +96,12 @@ let print_cfg (t : t) =
             (Types.Modulo_register_renaming.symbolize_register
                ~include_register_number:true)
       in
+      let print_live live =
+        print_registers
+          ( Reg.Set.to_seq live
+          |> Seq.fold_left (fun x a -> a :: x) []
+          |> Array.of_list )
+      in
       printf ".L%d:\n" block.start;
       List.iter block.body ~f:(fun instruction ->
           sprintf
@@ -104,15 +110,16 @@ let print_cfg (t : t) =
             instruction.desc
             (print_registers instruction.arg)
             (print_registers instruction.res)
-            (print_registers
-               ( Reg.Set.to_seq instruction.live
-               |> Seq.fold_left (fun x a -> a :: x) []
-               |> Array.of_list ))
+            (print_live instruction.live)
           |> indent_string |> print_endline);
 
       sprintf
-        !"#-%{sexp:Types.From_cfg.terminator}-#\n"
+        !"#-%{sexp:Types.From_cfg.terminator}-# Arg%{sexp:string array} \
+          Res%{sexp:string array} Live%{sexp: string array} \n"
         block.terminator.desc
+        (print_registers block.terminator.arg)
+        (print_registers block.terminator.res)
+        (print_live block.terminator.live)
       |> indent_string |> print_endline);
 
   Sexp.default_indent := init_indent

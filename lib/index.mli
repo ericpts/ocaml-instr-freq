@@ -52,7 +52,7 @@ end
 
 val empty : unit -> t
 
-val update : t -> Loop_free_block.t -> unit
+val update : ?source_file:Filename.t -> t -> Loop_free_block.t -> unit
 
 val equivalence_exn : t -> Loop_free_block.t -> Block_equivalence.t
 
@@ -75,3 +75,5 @@ type hashtbl_load_statistics = {
 }
 
 val hashtbl_load_statistics : t -> hashtbl_load_statistics
+
+val sample_file : t -> Block_equivalence.t -> Filename.t Option.t

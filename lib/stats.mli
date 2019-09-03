@@ -1,4 +1,5 @@
 open Equivalence
+open Core
 
 (* These statistics are ran over all of the code.
 
@@ -16,6 +17,11 @@ type t = {
     fundecl:Linear.fundecl ->
     [ `Stop | `Continue ];
   on_finish_iteration : unit -> unit;
+  (* These files might contain relevant information, (i.e., the blocks that
+     we are looking for, and that we want to print). It is recommended to
+     first iterate over these files, and then everything else, in order to
+     speed up the execution. *)
+  hint_files : String.Set.t;
 }
 
 val combine : t list -> t

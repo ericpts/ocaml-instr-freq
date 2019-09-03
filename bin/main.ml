@@ -49,7 +49,7 @@ let build_index files ~(index_file : Filename.t) ~context_length =
       List.iter functions ~f:(fun (_fun_decl, blocks) ->
           blocks_per_function := Array.length blocks :: !blocks_per_function;
           Array.iter blocks ~f:(fun block ->
-              Index.update index block;
+              Index.update ~source_file:file index block;
               instructions_per_block :=
                 (Loop_free_block.to_list block |> List.length)
                 :: !instructions_per_block)));
@@ -91,7 +91,6 @@ let main
     ~n_most_frequent_equivalences
     ~block_print_mode
     ~min_block_size
-    ~min_equivalence_class_size
     ~matcher_of_index
     ~context_length =
   let index =
@@ -108,7 +107,7 @@ let main
      return a pair of on_block and on_finish_iterations. What are the
      restrictions? e.g., does order they are listed in matter / do they have
      to preserve index? *)
-  let { Stats.on_block; on_finish_iteration } =
+  let { Stats.on_block; on_finish_iteration; hint_files } =
     let statistics = ref [] in
     let add_stat stat = statistics := stat :: !statistics in
     add_stat (Stats.count_blocks_matching index ~min_block_size ~matcher);
@@ -121,19 +120,20 @@ let main
 
     Stats.combine !statistics
   in
+  let files = String.Set.diff (String.Set.of_list files) hint_files in
+  let on_file file =
+    List.iter (Loop_free_block.read_file ~file ~context_length)
+      ~f:(fun (fundecl, blocks) ->
+        Array.iter blocks ~f:(fun block ->
+            let equivalence = Index.equivalence_exn index block in
+            let frequency = Index.frequency_exn index equivalence in
+            match on_block block ~file ~equivalence ~frequency ~fundecl with
+            | `Continue -> ()
+            | `Stop -> raise Utils.Stop_iteration))
+  in
   ( try
-      List.iter files ~f:(fun file ->
-          List.iter (Loop_free_block.read_file ~file ~context_length)
-            ~f:(fun (fundecl, blocks) ->
-              Array.iter blocks ~f:(fun block ->
-                  let equivalence = Index.equivalence_exn index block in
-                  let frequency = Index.frequency_exn index equivalence in
-                  if frequency >= min_equivalence_class_size then
-                    match
-                      on_block block ~file ~equivalence ~frequency ~fundecl
-                    with
-                    | `Continue -> ()
-                    | `Stop -> raise Utils.Stop_iteration)))
+      Set.iter hint_files ~f:on_file;
+      Set.iter files ~f:on_file
     with Utils.Stop_iteration -> () );
   on_finish_iteration ()
 ;;
@@ -156,17 +156,20 @@ let main_command =
       let anon_files = anon (sequence ("input" %: Filename.arg_type))
       and n_real_blocks_to_print =
         flag "-print-n-real-blocks"
-          (optional_with_default 5 int)
+          (optional_with_default 1 int)
           ~doc:
             "n Print [n] actual blocks from the codebase for each \
-             equivalence class."
+             equivalence class. For n=1, the index caches which files to \
+             look at, so the program should be very quick. For n >= 2, we \
+             have to look through all given files, and it might take a lot \
+             longer."
       and n_most_frequent_equivalences =
         flag "-n-most-frequent-equivalences"
           (optional_with_default 10 int)
           ~doc:"n Print most frequent equivalence classes"
       and block_print_mode =
         flag "-block-print-mode"
-          (required block_print_mode_arg)
+          (optional_with_default Loop_free_block.Both block_print_mode_arg)
           ~doc:
             "repr Which representatin to print blocks in. Must be one of \
              [asm | cfg | both]"
@@ -177,18 +180,12 @@ let main_command =
             "n Only report equivalence classes, for which the \
              representative block has at least [n] instructions (including \
              the terminator)."
-      and min_equivalence_class_size =
-        flag "-min-equivalence-class-size"
-          (optional_with_default 5 int)
-          ~doc:
-            "n Only report equivalence classes which have at least [n] \
-             members"
       and index_file =
         flag "-index-file"
           (required Filename.arg_type)
           ~doc:
             "filepath Location of index file. Will be built if it does not \
-             exist."
+             exist. If it exists, it is reused across multiple runs."
       and from_file =
         flag "-from-file"
           (optional Filename.arg_type)
@@ -208,7 +205,9 @@ let main_command =
              From the CFG graph,we will take chains of length [context] \
              and treat them as single blocks.This options permits us to \
              look at more instructions and gain better insight, however \
-             the worst-case running time is exponential in this parameter."
+             the worst-case running time is exponential in this \
+             parameter.If you change this option, then you *must* rebuild \
+             the index."
       in
       let matcher_of_index =
         Option.map matcher ~f:(fun matcher ->
@@ -230,7 +229,7 @@ let main_command =
       fun () ->
         main files ~index_file ~n_real_blocks_to_print
           ~n_most_frequent_equivalences ~block_print_mode ~min_block_size
-          ~min_equivalence_class_size ~matcher_of_index ~context_length]
+          ~matcher_of_index ~context_length]
 ;;
 
 let () = Command.run main_command
