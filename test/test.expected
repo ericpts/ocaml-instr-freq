@@ -93,3 +93,54 @@ _fun_start_:
 	Reloadretaddr: Arg() Res() Live()
 	#-Return-# Arg(reg#0) Res() Live() 
 [38;5;2m}[0m
+test_index_context_with_matcher
+Equivalence [38;5;6m<3>[0m with 2 members;
+	file: [38;5;6mrepetitive.ml[0m
+	function: [38;5;6mcamlLong_function__matrix_multiply_8[0m
+[38;5;2mBlocks (118 107 119): {[0m
+	.file ""
+	.section .text._fun_start_,"ax",@progbits
+	.align	16
+	.globl	_fun_start_
+_fun_start_:
+	.cfi_startproc
+.L118:
+	movq	$1, %rbx
+	movq	%rbx, 8(%rsp)
+.L107:
+	movq	$1, %rdi
+	call	camlStdlib__array__make_matrix_142@PLT
+.L100:
+	movq	$1, %rdx
+	movq	(%rsp), %rbx
+	addq	$-2, %rbx
+	cmpq	%rbx, %rdx
+	jg	.L101
+.L119:
+	movq	%rbx, (%rsp)
+	jmp	.L102
+	.cfi_endproc
+	.type _fun_start_,@function
+	.size _fun_start_,. - _fun_start_
+[38;5;2m==========[0m
+.L118:
+	(Op (Const_int 1)): Arg() Res(reg#1) Live(stack#local#0 stack#local#2 stack#local#3 stack#local#4 reg#0)
+	(Op Spill): Arg(reg#1) Res(stack#local#1) Live(stack#local#0 stack#local#2 stack#local#3 stack#local#4 reg#1 reg#0)
+	#-(Branch ((Always 107)))-# Arg() Res() Live() 
+.L107:
+	(Op (Const_int 1)): Arg() Res(reg#2) Live(stack#local#0 stack#local#1 stack#local#2 stack#local#3 stack#local#4 reg#1
+	    reg#0)
+	(Call
+	    (F
+	        (Immediate (func camlStdlib__array__make_matrix_142)
+	            (label_after 100)))): Arg(reg#0 reg#1 reg#2) Res(reg#0) Live(stack#local#0 stack#local#1 stack#local#2 stack#local#3 stack#local#4)
+	(Op (Const_int 1)): Arg() Res(reg#4) Live(stack#local#0 stack#local#1 stack#local#2 stack#local#3 stack#local#4 reg#0)
+	(Op Reload): Arg(stack#local#0) Res(reg#1) Live(stack#local#1 stack#local#2 stack#local#3 stack#local#4 reg#4 reg#0)
+	(Op (Intop_imm Iadd -2)): Arg(reg#1) Res(reg#1) Live(stack#local#1 stack#local#2 stack#local#3 stack#local#4 reg#4 reg#0)
+	#-(Branch
+	    (((Test (Iinttest (Isigned Cgt))) 101)
+	        ((Test (Iinttest (Isigned Cle))) 119)))-# Arg(reg#4 reg#1) Res() Live() 
+.L119:
+	(Op Spill): Arg(reg#1) Res(stack#local#0) Live(stack#local#1 stack#local#2 stack#local#3 stack#local#4 reg#4 reg#0)
+	#-(Branch ((Always 102)))-# Arg() Res() Live() 
+[38;5;2m}[0m
