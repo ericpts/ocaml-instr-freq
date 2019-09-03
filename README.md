@@ -103,7 +103,7 @@ This printed out a single basic block, with label 120.
 The first part (before =========) is its assembly form, whereas the second part (after =======) is the CFG format.
 
 
-See [here](equivalence_classes) for how blocks are grouped together.
+See [here](#equivalenceclasses) for how blocks are grouped together.
 
 
 In the CFG format, the instruction is followed by register information: `Arg` are the input registers (where they are indexed, so `reg#0` is `%rax`, and `stack#local#0` is `(%rsp)`.), `Res` are the output registers, and `Live` are the live ones (i.e., their value is used at some point after the current instruction).
@@ -318,7 +318,7 @@ dune exec bin/main.exe -- test/fixtures/long_function.cmir-linear -index-file /t
 and see that there is a single occurance of this pattern.
 
 
-## <a name="equivalence_classes"> Equivalence classes </a>
+## <a name="equivalenceclasses"> Equivalence classes </a>
 
 All basic blocks are different to one another, and so in order to obtain useful
 information we group them by equivalence classes.
