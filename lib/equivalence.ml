@@ -24,7 +24,7 @@ module Generic_instruction_equivalence = struct
     basic + 1
   ;;
 
-  let of_terminator terminator =
+  let of_terminator (terminator : Terminator_instruction_equivalence.t) =
     assert (terminator >= 0);
     -(terminator + 1)
   ;;

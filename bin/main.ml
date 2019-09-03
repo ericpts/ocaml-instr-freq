@@ -30,19 +30,6 @@ let build_index files ~(index_file : Filename.t) ~context_length =
   let instructions_per_block = ref [] in
   List.iteri files ~f:(fun ifile file ->
       if ifile % 5000 = 0 then Gc.compact ();
-      let () =
-        let { Index.n_symbolic_blocks;
-              n_basic_instructions;
-              n_terminator_instructions
-            } =
-          Index.hashtbl_load_statistics index
-        in
-        eprintf_progress
-          "Processing file %d/%d; Index load: Symbolic_blocks: %d; \
-           Instructions: (basic: %d) (terminator: %d) \r"
-          ifile total_number_of_files n_symbolic_blocks n_basic_instructions
-          n_terminator_instructions
-      in
       let functions = Loop_free_block.read_file ~file ~context_length in
       functions_per_file := List.length functions :: !functions_per_file;
 
@@ -52,7 +39,18 @@ let build_index files ~(index_file : Filename.t) ~context_length =
               Index.update ~source_file:file index block;
               instructions_per_block :=
                 (Loop_free_block.to_list block |> List.length)
-                :: !instructions_per_block)));
+                :: !instructions_per_block));
+      let { Index.n_symbolic_blocks;
+            n_basic_instructions;
+            n_terminator_instructions
+          } =
+        Index.hashtbl_load_statistics index
+      in
+      eprintf_progress
+        "Processing file %d/%d; Index load: Symbolic_blocks: %d; \
+         Instructions: (basic: %d) (terminator: %d) \r"
+        ifile total_number_of_files n_symbolic_blocks n_basic_instructions
+        n_terminator_instructions);
   let () = Index.to_file index ~filename:index_file in
   let sum nums = List.sum (module Int) nums ~f:Fn.id in
   let mean nums =
@@ -166,7 +164,7 @@ let main_command =
       and n_most_frequent_equivalences =
         flag "-n-most-frequent-equivalences"
           (optional_with_default 10 int)
-          ~doc:"n Print most frequent equivalence classes"
+          ~doc:"n Print most frequent equivalence classes. Defaults to 10."
       and block_print_mode =
         flag "-block-print-mode"
           (optional_with_default Loop_free_block.Both block_print_mode_arg)
@@ -179,7 +177,7 @@ let main_command =
           ~doc:
             "n Only report equivalence classes, for which the \
              representative block has at least [n] instructions (including \
-             the terminator)."
+             the terminator). Defaults to 5."
       and index_file =
         flag "-index-file"
           (required Filename.arg_type)
@@ -207,7 +205,7 @@ let main_command =
              look at more instructions and gain better insight, however \
              the worst-case running time is exponential in this \
              parameter.If you change this option, then you *must* rebuild \
-             the index."
+             the index. Defaults to 0."
       in
       let matcher_of_index =
         Option.map matcher ~f:(fun matcher ->

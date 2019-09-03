@@ -109,7 +109,7 @@ module Symbolic_block = struct
         (arg, res)
       in
       Array.concat_map
-        (Loop_free_block.to_list loop_free_block |> Array.of_list)
+        (Loop_free_block.to_list loop_free_block |> Array.of_list_rev)
         ~f:(fun block ->
           List.map block.body ~f:(fun basic ->
               let desc =
@@ -208,11 +208,25 @@ module Matcher = struct
               Instruction_index.get_id_for_basic index.instruction_index
                 basic
               |> Option.value_exn
+                   ~error:
+                     (Error.of_thunk (fun () ->
+                          sprintf
+                            !"Matcher contains basic instruction not \
+                              present in the index:\n\
+                              %{sexp: Types.From_cfg.basic}!"
+                            basic))
               |> Generic_instruction_equivalence.of_basic
           | Terminator terminator ->
               Instruction_index.get_id_for_terminator
                 index.instruction_index terminator
               |> Option.value_exn
+                   ~error:
+                     (Error.of_thunk (fun () ->
+                          sprintf
+                            !"Matcher contains terminator not present in \
+                              the index:\n\
+                              %{sexp: Types.From_cfg.terminator}"
+                            terminator))
               |> Generic_instruction_equivalence.of_terminator
         in
         { instruction with desc })
