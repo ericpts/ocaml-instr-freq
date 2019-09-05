@@ -108,7 +108,7 @@ See [here](#equivalenceclasses) for how blocks are grouped together.
 
 In the CFG format, the instruction is followed by register information: `Arg` are the input registers (where they are indexed, so `reg#0` is `%rax`, and `stack#local#0` is `(%rsp)`.), `Res` are the output registers, and `Live` are the live ones (i.e., their value is used at some point after the current instruction).
 
-By default, this only prints out blocks of length (number of linear instructions) of at least 5 (including the terminator). For a different value, pass the `-min-block-size 10` flag.
+By default, this only prints out blocks of length (number of linear instructions) of at least 5 (including the terminator). For a different value, pass the `-min-block-size <num>` flag.
 
 ### Index caching
 
@@ -128,11 +128,9 @@ With that said, the printed `CFG` is the final one, used by the compiler itself,
 The assembly form contains some preamble and postamble, but the relevant code lays 
 between `.cfi_startproc` and `.cfi_endproc`.
 
-
 ## Context
 
-It is possible to increase the "context" -- by default, looking at individual basic blocks
-is a context of 0.
+It is possible to increase the "context". By default, the program looks at individual basic blocks, which is a context of 0.
 
 A context length of 1 corresponds to looking at pairs of adjacent basic blocks of the cfg,
 and you can make this length arbitrarily long, though at the cost of (possibly) exponential explosion.
