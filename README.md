@@ -1,6 +1,6 @@
 # ocaml-instr-freq
 
-[![Build Status](https://travis-ci.com/ericpts/ocaml-instr-freq.svg?branch=master)](https://travis-ci.com/ericpts/ocaml-instr-freq)
+[![Build Status](https://travis-ci.org/ericpts/ocaml-instr-freq.svg?branch=master)](https://travis-ci.org/ericpts/ocaml-instr-freq)
 
 Count frequency of basic blocks in OCaml code.
 This is useful for knowing which optimizations would have the most impact, if they were to be implemented in the compiler.

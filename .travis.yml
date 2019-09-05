@@ -4,11 +4,24 @@ sudo: false
 env:
   - OCAML_VERSION=4.08
 
+before_install:
+  - sh <(curl -sL https://raw.githubusercontent.com/ocaml/ocaml-ci-scripts/master/.travis-ocaml.sh)
 
 install:
-  - sh <(curl -sL https://raw.githubusercontent.com/ocaml/opam/master/shell/install.sh)
-  - opam pin add ppx_compare https://github.com/janestreet/ppx_compare.git\#58696fd0a9aac7be49fef0ab1ff6798dad3c8a72
-  - opam pin add ppx_hash https://github.com/janestreet/ppx_hash.git\#b69549c05cad09a900e3708c7216761b19dae075
-  - opam pin add ocamlcfg https://github.com/gretay-js/ocamlcfg.git
-  - opam pin add ocaml-migrate-parsetree https://github.com/gretay-js/ocaml-migrate-parsetree.git\#immediate64_ast408
-  - opam pin add ocaml-variants https://github.com/gretay-js/ocaml.git\#wip8
+  - opam switch create dev --empty
+  - eval $(opam env)
+  - opam pin add -y ocaml-variants https://github.com/gretay-js/ocaml.git\#wip8
+  - opam pin add -y ocaml-migrate-parsetree https://github.com/gretay-js/ocaml-migrate-parsetree.git\#immediate64_ast408
+  - opam pin add -y ocamlcfg https://github.com/gretay-js/ocamlcfg.git
+
+  - ocamlc -v
+
+  - opam install -y ppx_jane core async
+
+  - opam pin add -n ppx_compare https://github.com/janestreet/ppx_compare.git\#58696fd0a9aac7be49fef0ab1ff6798dad3c8a72
+  - opam pin add -n ppx_hash https://github.com/janestreet/ppx_hash.git\#b69549c05cad09a900e3708c7216761b19dae075
+  - opam install -y ppx_compare ppx_hash
+
+
+script:
+  - dune runtest
