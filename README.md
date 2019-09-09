@@ -236,6 +236,9 @@ Notice that this time, each printout is composed of two basic blocks glued toget
 
 ### Matchers
 
+
+#### Subsequence
+
 If you identify an interesting pattern, and want to see how many times it appears, you can use
 the matching functionality.
 
@@ -320,6 +323,14 @@ and see that there is a single occurance of this pattern.
 
 All basic blocks are different to one another, and so in order to obtain useful
 information we group them by equivalence classes.
+
+#### Whole block
+
+In case the subsequence matchers are not precise enough, you are able to define whole-block matchers, with
+your custom predicate.
+
+Currently, this can only be done programatically, and you must write code for it.
+
 
 
 ### Instruction equivalence classes
