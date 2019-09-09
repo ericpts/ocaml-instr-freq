@@ -24,4 +24,5 @@ install:
 
 
 script:
+  - dune build bin/main.exe
   - dune runtest
