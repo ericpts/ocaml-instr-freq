@@ -95,7 +95,7 @@ _fun_start_:
 [38;5;2m}[0m
 test_index_context_with_matcher
 Equivalence [38;5;6m<3>[0m with 2 members;
-	file: [38;5;6mrepetitive.ml[0m
+	file: [38;5;6mlong_function.ml[0m
 	function: [38;5;6mcamlLong_function__matrix_multiply_8[0m
 [38;5;2mBlocks (118 107 119): {[0m
 	.file ""
@@ -143,4 +143,53 @@ _fun_start_:
 .L119:
 	(Op Spill): Arg(reg#1) Res(stack#local#0) Live(stack#local#1 stack#local#2 stack#local#3 stack#local#4 reg#4 reg#0)
 	#-(Branch ((Always 102)))-# Arg() Res() Live() 
+[38;5;2m}[0m
+test_index_whole_block_matcher
+There are a total of 5 blocks matching the query criteria.
+Equivalence [38;5;6m<0>[0m with 2 members;
+	file: [38;5;6mlong_function.ml[0m
+	function: [38;5;6mcamlLong_function__matrix_multiply_8[0m
+[38;5;2mBlocks (0): {[0m
+	.file ""
+	.section .text._fun_start_,"ax",@progbits
+	.align	16
+	.globl	_fun_start_
+_fun_start_:
+	.cfi_startproc
+.L0:
+.L122:
+	movq	%rax, 32(%rsp)
+	movq	%rbx, 24(%rsp)
+	movq	-8(%rax), %rax
+	shrq	$9, %rax
+	orq	$1, %rax
+	movq	%rax, (%rsp)
+	movq	-8(%rbx), %rdi
+	movq	%rdi, %rsi
+	shrq	$9, %rsi
+	orq	$1, %rsi
+	movq	%rsi, 16(%rsp)
+	cmpq	$1, %rsi
+	jne	.L108
+	jmp	.L118
+	.cfi_endproc
+	.type _fun_start_,@function
+	.size _fun_start_,. - _fun_start_
+[38;5;2m==========[0m
+.L0:
+	Prologue: Arg() Res() Live(reg#0 reg#1)
+	(Op Spill): Arg(reg#0) Res(stack#local#4) Live(reg#0 reg#1)
+	(Op Spill): Arg(reg#1) Res(stack#local#3) Live(stack#local#4 reg#1 reg#0)
+	(Op (Load Word_int (Iindexed -8))): Arg(reg#0) Res(reg#0) Live(stack#local#3 stack#local#4 reg#1)
+	(Op (Intop_imm Ilsr 9)): Arg(reg#0) Res(reg#0) Live(stack#local#3 stack#local#4 reg#1)
+	(Op (Intop_imm Ior 1)): Arg(reg#0) Res(reg#0) Live(stack#local#3 stack#local#4 reg#1)
+	(Op Spill): Arg(reg#0) Res(stack#local#0) Live(stack#local#3 stack#local#4 reg#0 reg#1)
+	(Op (Load Word_int (Iindexed -8))): Arg(reg#1) Res(reg#2) Live(stack#local#0 stack#local#3 stack#local#4 reg#0 reg#1)
+	(Op Move): Arg(reg#2) Res(reg#3) Live(stack#local#0 stack#local#3 stack#local#4 reg#2 reg#0 reg#1)
+	(Op (Intop_imm Ilsr 9)): Arg(reg#3) Res(reg#3) Live(stack#local#0 stack#local#3 stack#local#4 reg#2 reg#0 reg#1)
+	(Op (Intop_imm Ior 1)): Arg(reg#3) Res(reg#3) Live(stack#local#0 stack#local#3 stack#local#4 reg#2 reg#0 reg#1)
+	(Op Spill): Arg(reg#3) Res(stack#local#2) Live(stack#local#0 stack#local#3 stack#local#4 reg#3 reg#2 reg#0 reg#1)
+	#-(Branch
+	    (((Test (Iinttest_imm (Isigned Cne) 1)) 108)
+	        ((Test (Iinttest_imm (Isigned Ceq) 1)) 118)))-# Arg(reg#3) Res() Live() 
 [38;5;2m}[0m
