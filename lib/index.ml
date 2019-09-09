@@ -71,6 +71,27 @@ module Instruction_index = struct
   let get_id_for_basic (t : t) = Hashtbl.find t.for_basic
 
   let get_id_for_terminator (t : t) = Hashtbl.find t.for_terminator
+
+  let invert (t : t) =
+    let invert_hashtbl hashtbl equivalence_to_int =
+      let array =
+        Hashtbl.to_alist hashtbl
+        |> List.sort ~compare:(fun (_i, e1) (_i, e2) ->
+               Int.compare (equivalence_to_int e1) (equivalence_to_int e2))
+        |> List.map ~f:(fun (instruction, _equivalence_class) ->
+               instruction)
+        |> Array.of_list
+      in
+      Array.iteri array ~f:(fun index instruction ->
+          assert (
+            Hashtbl.find_exn hashtbl instruction
+            |> equivalence_to_int = index ));
+      array
+    in
+    ( invert_hashtbl t.for_basic Basic_instruction_equivalence.to_int,
+      invert_hashtbl t.for_terminator
+        Terminator_instruction_equivalence.to_int )
+  ;;
 end
 
 module With_register_information = struct
@@ -171,13 +192,23 @@ end
 include T
 
 module Matcher = struct
-  type t =
-    Generic_instruction_equivalence.t With_register_information.t Array.t
-
   type desc =
     | Basic of Types.From_cfg.basic
     | Terminator of Types.From_cfg.terminator
   [@@deriving sexp]
+
+  type subsequence_matcher =
+    Generic_instruction_equivalence.t With_register_information.t Array.t
+
+  type whole_block_matcher = {
+    f : block:desc With_register_information.t Array.t -> bool;
+    inverted_basic : Cfg.basic Array.t;
+    inverted_terminator : Cfg.terminator Array.t;
+  }
+
+  type t =
+    | For_subsequence of subsequence_matcher
+    | For_whole_block of whole_block_matcher
 
   let renumber instructions =
     let register_index = Hashtbl.create (module Int) in
@@ -200,8 +231,9 @@ module Matcher = struct
         })
   ;;
 
-  let create (instructions : desc With_register_information.t list) index =
-    Array.map (Array.of_list instructions) ~f:(fun instruction ->
+  let create_for_subsequence
+      ~(instructions : desc With_register_information.t Array.t) ~index =
+    Array.map instructions ~f:(fun instruction ->
         let desc =
           match instruction.desc with
           | Basic basic ->
@@ -230,10 +262,17 @@ module Matcher = struct
               |> Generic_instruction_equivalence.of_terminator
         in
         { instruction with desc })
-    |> renumber
+    |> renumber |> For_subsequence
   ;;
 
-  (** We can think of this matching problem as substring search: [t]
+  let create_for_whole_block ~f ~index =
+    let inverted_basic, inverted_terminator =
+      Instruction_index.invert index.instruction_index
+    in
+    { f; inverted_basic; inverted_terminator } |> For_whole_block
+  ;;
+
+  (** We think of this matching problem as substring search: [subsequence]
       contains the pattern, [symbolic_block] contains the large string, and
       we want to see if the pattern appears in the large string.
 
@@ -246,8 +285,10 @@ module Matcher = struct
       Therefore, in order to check if the pattern matches a substring of
       [symbolic_block], we first need to renumber the registers of that
       substring. *)
-  let matches (t : t) (symbolic_block : Symbolic_block.t) =
-    let k = Array.length t in
+  let matches_subsequence
+      (subsequence : subsequence_matcher)
+      (symbolic_block : Symbolic_block.t) =
+    let k = Array.length subsequence in
     try
       for i = 0 to Array.length symbolic_block - k do
         let cur = renumber (Array.sub symbolic_block ~pos:i ~len:k) in
@@ -255,12 +296,43 @@ module Matcher = struct
           Array.equal
             (With_register_information.equal
                Generic_instruction_equivalence.equal)
-            t cur
+            subsequence cur
         in
         if good then raise Utils.Stop_iteration
       done;
       false
     with Utils.Stop_iteration -> true
+  ;;
+
+  let matches_whole_block
+      ({ f; inverted_basic; inverted_terminator } : whole_block_matcher)
+      (symbolic_block : Symbolic_block.t) =
+    let block =
+      Array.map symbolic_block ~f:(fun symbolic_instruction ->
+          let desc =
+            match
+              Generic_instruction_equivalence.unwrap
+                symbolic_instruction.desc
+            with
+            | Basic basic ->
+                inverted_basic.(basic
+                                |> Basic_instruction_equivalence.to_int)
+                |> Basic
+            | Terminator terminator ->
+                inverted_terminator.(terminator
+                                     |> Terminator_instruction_equivalence
+                                        .to_int)
+                |> Terminator
+          in
+          { symbolic_instruction with desc })
+    in
+    f ~block
+  ;;
+
+  let matches (t : t) (symbolic_block : Symbolic_block.t) =
+    match t with
+    | For_subsequence s -> matches_subsequence s symbolic_block
+    | For_whole_block w -> matches_whole_block w symbolic_block
   ;;
 end
 
@@ -383,15 +455,6 @@ module Equivalence_metadata = struct
   }
 end
 
-(* XCR gyorsh for ericpts: does Hashtbl.to_alist guarantee that the order of
-   pairs in the resulting list is the order of keys? also, wouldn't to_alist
-   allocate a huge new list? Another option is to iterate over the hashtable
-   and then use random access into the frequency array.
-
-   Array.length symbolic_block breaks the abstraction of how symbolic blocks
-   are represented.
-
-   why do you use backticks and not records or named arguments? *)
 let filter_and_sort_equivalences t ~min_block_size ~matcher =
   Hashtbl.filter_mapi t.symbolic_block_index
     ~f:(fun ~key:representative ~data:equivalence ->

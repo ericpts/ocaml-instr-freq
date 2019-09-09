@@ -26,5 +26,9 @@ module Generic_instruction_equivalence : sig
 
   val of_terminator : Terminator_instruction_equivalence.t -> t
 
-  val unwrap : t -> [> `Basic of t | `Terminator of t ]
+  type unwrap =
+    | Basic of Basic_instruction_equivalence.t
+    | Terminator of Terminator_instruction_equivalence.t
+
+  val unwrap : t -> unwrap
 end

@@ -1,6 +1,14 @@
 open Core
 open Instr_freq
 
+module Fixture_files = struct
+  let simple : Filename.t = "simple.ml"
+
+  let repetitive : Filename.t = "repetitive.ml"
+
+  let long_function : Filename.t = "long_function.ml"
+end
+
 let find_fixtures_directory () =
   let rec walk cur =
     if cur = Filename.root then
@@ -22,16 +30,17 @@ let matcher_of_sexp sexp =
     let instructions =
       Sexp.load_sexps_conv_exn fname
         [%of_sexp: Index.Matcher.desc Index.With_register_information.t]
+      |> Array.of_list
     in
-    Index.Matcher.create instructions
+    Index.Matcher.create_for_subsequence ~instructions
   in
   Sys.remove fname;
   matcher
 ;;
 
-let build_index_for_fixture ~fixtures_directory ~context_length fixture_name
-    =
-  let ml_file = fixtures_directory ^/ sprintf "%s.ml" fixture_name in
+let build_index_for_fixture
+    ~fixtures_directory ~context_length ~fixture_file =
+  let ml_file = fixtures_directory ^/ fixture_file in
   let open Async in
   (* Don't enter the async monad, to preserve error message call stacks, in
      case the tests fail. *)
@@ -68,8 +77,10 @@ let iter_blocks blocks ~index ~file ~statistics =
 ;;
 
 let test_index_statistics ~fixtures_directory =
+  let fixture_file = Fixture_files.simple in
   let _blocks, index =
-    build_index_for_fixture "simple" ~fixtures_directory ~context_length:0
+    build_index_for_fixture ~fixture_file ~fixtures_directory
+      ~context_length:0
   in
   let { Index.n_symbolic_blocks;
         n_basic_instructions;
@@ -84,8 +95,10 @@ let test_index_statistics ~fixtures_directory =
 
 let test_matching_functionality ~fixtures_directory =
   printf "test_matching_functionality\n";
+  let fixture_file = Fixture_files.simple in
   let blocks, index =
-    build_index_for_fixture "simple" ~fixtures_directory ~context_length:0
+    build_index_for_fixture ~fixture_file ~fixtures_directory
+      ~context_length:0
   in
   let matcher =
     let sexp = {|
@@ -95,7 +108,7 @@ let test_matching_functionality ~fixtures_directory =
  (res (1))
 )
 |} in
-    Some (matcher_of_sexp sexp index)
+    Some (matcher_of_sexp sexp ~index)
   in
   let statistics =
     Stats.combine
@@ -106,13 +119,14 @@ let test_matching_functionality ~fixtures_directory =
           ~matcher
       ]
   in
-  iter_blocks blocks ~index ~file:"simple.ml" ~statistics
+  iter_blocks blocks ~index ~file:fixture_file ~statistics
 ;;
 
 let test_index_bigger_file ~fixtures_directory =
   printf "test_index_bigger_file\n";
+  let fixture_file = Fixture_files.repetitive in
   let blocks, index =
-    build_index_for_fixture "repetitive" ~fixtures_directory
+    build_index_for_fixture ~fixture_file ~fixtures_directory
       ~context_length:0
   in
   let statistics =
@@ -123,13 +137,14 @@ let test_index_bigger_file ~fixtures_directory =
           ~matcher:None
       ]
   in
-  iter_blocks blocks ~index ~file:"repetitive.ml" ~statistics
+  iter_blocks blocks ~index ~file:fixture_file ~statistics
 ;;
 
 let test_index_context ~fixtures_directory =
   printf "test_index_context\n";
+  let fixture_file = Fixture_files.repetitive in
   let blocks, index =
-    build_index_for_fixture "repetitive" ~fixtures_directory
+    build_index_for_fixture ~fixture_file ~fixtures_directory
       ~context_length:1
   in
   let statistics =
@@ -140,13 +155,14 @@ let test_index_context ~fixtures_directory =
           ~matcher:None
       ]
   in
-  iter_blocks blocks ~index ~file:"repetitive.ml" ~statistics
+  iter_blocks blocks ~index ~file:fixture_file ~statistics
 ;;
 
 let test_index_context_with_matcher ~fixtures_directory =
   printf "test_index_context_with_matcher\n";
+  let fixture_file = Fixture_files.long_function in
   let blocks, index =
-    build_index_for_fixture "long_function" ~fixtures_directory
+    build_index_for_fixture ~fixture_file ~fixtures_directory
       ~context_length:2
   in
   let matcher =
@@ -172,7 +188,7 @@ let test_index_context_with_matcher ~fixtures_directory =
 )
 |}
     in
-    Some (matcher_of_sexp sexp index)
+    Some (matcher_of_sexp sexp ~index)
   in
   let statistics =
     Stats.combine
@@ -181,7 +197,36 @@ let test_index_context_with_matcher ~fixtures_directory =
           ~block_print_mode:Loop_free_block.Both ~min_block_size:0 ~matcher
       ]
   in
-  iter_blocks blocks ~index ~file:"repetitive.ml" ~statistics
+  iter_blocks blocks ~index ~file:fixture_file ~statistics
+;;
+
+let test_index_whole_block_matcher ~fixtures_directory =
+  printf "test_index_whole_block_matcher\n";
+  let fixture_file = Fixture_files.long_function in
+  let blocks, index =
+    build_index_for_fixture ~fixture_file ~fixtures_directory
+      ~context_length:0
+  in
+  let matcher =
+    Index.Matcher.create_for_whole_block
+      ~f:(fun ~block ->
+        Array.find block ~f:(fun instruction ->
+            match instruction.Index.With_register_information.desc with
+            | Basic (Op (Intop_imm (Ior, _))) -> true
+            | _ -> false)
+        |> Option.is_some)
+      ~index
+    |> Some
+  in
+  let statistics =
+    Stats.combine
+      [ Stats.count_blocks_matching index ~min_block_size:0 ~matcher;
+        Stats.print_most_popular_classes index ~n_real_blocks_to_print:1
+          ~n_most_frequent_equivalences:1
+          ~block_print_mode:Loop_free_block.Both ~min_block_size:0 ~matcher
+      ]
+  in
+  iter_blocks blocks ~index ~file:fixture_file ~statistics
 ;;
 
 let main ~fixtures_directory =
@@ -189,7 +234,8 @@ let main ~fixtures_directory =
   test_matching_functionality ~fixtures_directory;
   test_index_bigger_file ~fixtures_directory;
   test_index_context ~fixtures_directory;
-  test_index_context_with_matcher ~fixtures_directory
+  test_index_context_with_matcher ~fixtures_directory;
+  test_index_whole_block_matcher ~fixtures_directory
 ;;
 
 let () = main ~fixtures_directory:(find_fixtures_directory ())

@@ -29,11 +29,15 @@ module Generic_instruction_equivalence = struct
     -(terminator + 1)
   ;;
 
+  type unwrap =
+    | Basic of Basic_instruction_equivalence.t
+    | Terminator of Terminator_instruction_equivalence.t
+
   let unwrap t =
     match t with
-    | p when p > 0 -> `Basic (Basic_instruction_equivalence.of_int (p - 1))
+    | p when p > 0 -> Basic (Basic_instruction_equivalence.of_int (p - 1))
     | n when n < 0 ->
-        `Terminator (Terminator_instruction_equivalence.of_int (-n - 1))
+        Terminator (Terminator_instruction_equivalence.of_int (-n - 1))
     | x ->
         failwithf
           "Got unexpected generic_instruction_equivalence class equal to %d"

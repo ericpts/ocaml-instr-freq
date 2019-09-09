@@ -99,7 +99,7 @@ let main
       index )
     else build_index files ~index_file ~context_length
   in
-  let matcher = Option.map matcher_of_index ~f:(fun f -> f index) in
+  let matcher = Option.map matcher_of_index ~f:(fun f -> f ~index) in
   (* XCR gyorsh for : this is a nice way to add different patterns; consider
      separating it out a bit more and explosing a type for functions that
      return a pair of on_block and on_finish_iterations. What are the
@@ -214,8 +214,9 @@ let main_command =
               Sexp.load_sexps_conv_exn matcher
                 [%of_sexp:
                   Index.Matcher.desc Index.With_register_information.t]
+              |> Array.of_list
             in
-            Index.Matcher.create instructions)
+            Index.Matcher.create_for_subsequence ~instructions)
       in
       let files =
         anon_files
