@@ -12,7 +12,7 @@ install:
   - eval $(opam env)
   - opam pin add -y ocaml-variants https://github.com/gretay-js/ocaml.git\#wip8
   - opam pin add -y ocaml-migrate-parsetree https://github.com/gretay-js/ocaml-migrate-parsetree.git\#immediate64_ast408
-  - opam pin add -y ocamlcfg https://github.com/gretay-js/ocamlcfg.git
+  - opam pin add -y ocamlcfg https://github.com/gretay-js/ocamlcfg.git\#8715c47284439557f91ca5ac5c6419189c2f11c7
 
   - ocamlc -v
 
