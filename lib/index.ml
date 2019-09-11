@@ -197,6 +197,14 @@ module Matcher = struct
     | Terminator of Types.From_cfg.terminator
   [@@deriving sexp]
 
+  module Whole_block_predicate = struct
+    type block = desc With_register_information.t Array.t
+
+    module type S = sig
+      val f : block:desc With_register_information.t Array.t -> bool
+    end
+  end
+
   type subsequence_matcher =
     Generic_instruction_equivalence.t With_register_information.t Array.t
 

@@ -53,6 +53,14 @@ module Matcher : sig
   val create_for_subsequence :
     instructions:desc With_register_information.t Array.t -> index:T.t -> t
 
+  module Whole_block_predicate : sig
+    type block = desc With_register_information.t Array.t
+
+    module type S = sig
+      val f : block:block -> bool
+    end
+  end
+
   val create_for_whole_block :
     f:(block:desc With_register_information.t Array.t -> bool) ->
     index:T.t ->

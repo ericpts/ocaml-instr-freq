@@ -1,0 +1,4 @@
+(library
+ (name patterns)
+ (libraries core instr_freq)
+)

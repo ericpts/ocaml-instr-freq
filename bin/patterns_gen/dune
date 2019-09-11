@@ -1,0 +1,5 @@
+(executables
+ (names gen)
+ (libraries core compiler-libs.common compiler-libs.bytecomp)
+ (preprocess (pps ppx_jane))
+)

@@ -21,6 +21,18 @@ let eprintf_progress fmt =
     fmt
 ;;
 
+let load_whole_block_predicate_by_name ~pattern_name =
+  let m =
+    List.Assoc.find_exn Import_patterns.all ~equal:String.equal pattern_name
+  in
+  let module Whole_block_predicate = ( val m
+                                         : Index.Matcher
+                                           .Whole_block_predicate
+                                           .S )
+  in
+  Whole_block_predicate.f
+;;
+
 let build_index files ~(index_file : Filename.t) ~context_length =
   let total_number_of_files = List.length files in
   printf "Building the index...\n%!";
@@ -189,12 +201,20 @@ let main_command =
           (optional Filename.arg_type)
           ~doc:
             "list-file Treat each line of [list-file] as a file to process."
-      and matcher =
-        flag "-use-matcher"
+      and subsequence_matcher =
+        flag "-use-subsequence-matcher"
           (optional Filename.arg_type)
           ~doc:
             "sexp_matcher_file Print only symbolic blocks which match the \
-             given matcher."
+             given subsequence matcher."
+      and whole_block_matcher =
+        flag "-use-whole-block-matcher"
+          (optional Filename.arg_type)
+          ~doc:
+            "patterns_name Print only symbolic blocks which match the \
+             given whole-block matcher. The given argument should be the \
+             name of a pattern, with a matching file \
+             patterns/pattern_${patterns_name}"
       and context_length =
         flag "-context-length"
           (optional_with_default 0 int)
@@ -208,15 +228,25 @@ let main_command =
              the index. Defaults to 0."
       in
       let matcher_of_index =
-        Option.map matcher ~f:(fun matcher ->
-            printf "Loading matcher from %s\n%!" matcher;
+        match (subsequence_matcher, whole_block_matcher) with
+        | None, None -> None
+        | Some _, Some _ ->
+            failwith
+              "Please specify at most one of-use-subsequence-matcher and \
+               -use-whole-block-matcher!"
+        | Some sexp_matcher_file, None ->
+            printf "Loading matcher from %s\n%!" sexp_matcher_file;
             let instructions =
-              Sexp.load_sexps_conv_exn matcher
+              Sexp.load_sexps_conv_exn sexp_matcher_file
                 [%of_sexp:
                   Index.Matcher.desc Index.With_register_information.t]
               |> Array.of_list
             in
-            Index.Matcher.create_for_subsequence ~instructions)
+            Index.Matcher.create_for_subsequence ~instructions |> Some
+        | None, Some pattern_name ->
+            Index.Matcher.create_for_whole_block
+              ~f:(load_whole_block_predicate_by_name ~pattern_name)
+            |> Some
       in
       let files =
         anon_files

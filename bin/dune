@@ -4,6 +4,20 @@
   core
   ocamlcfg
   instr_freq
+  patterns
  )
  (preprocess (pps ppx_jane))
  )
+
+(rule
+ (targets import_patterns.ml)
+ (deps
+  (:gen patterns_gen/gen.exe)
+  (:mls (glob_files ../patterns/pattern_*.ml))
+ )
+ (action
+  (chdir "../patterns"
+   (run %{gen} %{mls} -o %{targets})
+  )
+ )
+)

@@ -313,24 +313,32 @@ After this, we can run the command
 
 ```
 rm -f /tmp/index.bin
-dune exec bin/main.exe -- test/fixtures/long_function.cmir-linear -index-file /tmp/index.bin -context 1 -use-matcher ~/matcher.sexp
+dune exec bin/main.exe -- test/fixtures/long_function.cmir-linear -index-file /tmp/index.bin -context 1 -use-subsequence-matcher ~/matcher.sexp
 ```
 
 and see that there is a single occurance of this pattern.
 
-
-## <a name="equivalenceclasses"> Equivalence classes </a>
-
-All basic blocks are different to one another, and so in order to obtain useful
-information we group them by equivalence classes.
 
 #### Whole block
 
 In case the subsequence matchers are not precise enough, you are able to define whole-block matchers, with
 your custom predicate.
 
-Currently, this can only be done programatically, and you must write code for it.
+Say we want to create a pattern matcher which just looks for `add` instructions; let's call this
+matcher `simple_add`.
 
+We then create the file `patterns/pattern_simple_add.ml`, and then pass it to the program by via the `-use-whole-block-matcher` flag:
+
+
+```
+rm -f /tmp/index.bin
+dune exec bin/main.exe -- test/fixtures/long_function.cmir-linear -index-file /tmp/index.bin -context 1 -use-whole-block-matcher simple_add
+```
+
+## <a name="equivalenceclasses"> Equivalence classes </a>
+
+All basic blocks are different to one another, and so in order to obtain useful
+information we group them by equivalence classes.
 
 
 ### Instruction equivalence classes
