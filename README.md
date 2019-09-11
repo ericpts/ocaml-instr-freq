@@ -12,7 +12,8 @@ Currently, this only works for x86-64 targets.
 
 In this part, we will be using the test fixture `repetitive.ml`:
 
-```ml
+```bash
+$ cat test/fixtures/repetitive.ml
 let rec f0 n =
   match n with
   | 0 | 1 -> 1
@@ -35,37 +36,30 @@ let rec f2 n =
 First, you need to tell the ocaml compiler to save the linear representation of your sources:
 
 ```bash
-ocamlopt -save-ir-after linearize test/fixtures/repetitive.ml
+$ ocamlopt -save-ir-after linearize -stop-after linearize test/fixtures/repetitive.ml
 ```
 
-If you are using dune, you can do this via the `OCAMLOPTFLAGS` environment variable:
-
-```bash
-OCAMLOPTFLAGS=":standard -save-ir-after linearize" dune build
-```
-
-Next, run this program on the linear file:
-
-```bash
-dune exec bin/main.exe -- test/fixtures/repetitive.cmir-linear -index-file /tmp/index.bin
-```
-
+Next, run this program on the linear file 
 and you should get output which looks like this (but in your terminal it should be
 nicely colored):
 
-```asm
+```bash
+$ dune exec bin/main.exe -- test/fixtures/repetitive.cmir-linear -index-file /tmp/index.bin
+Building the index...
+[  8ms] Processing file 0/1; Index load: Symbolic_blocks: 4; Instructions: (basic: 8) (terminator: 2) 
+Saved index to /tmp/index.bin
 There are a total of 3 blocks matching the query criteria.
 Equivalence <1> with 3 members;
 	file: test/fixtures/repetitive.cmir-linear
 	function: camlRepetitive__f0_11
-Blocks (120): {
+Blocks (109): {
 	.file ""
 	.section .text._fun_start_,"ax",@progbits
 	.align	16
 	.globl	_fun_start_
 _fun_start_:
 	.cfi_startproc
-.L120:
+.L109:
 	movq	%rax, (%rsp)
 	addq	$-4, %rax
 	call	camlRepetitive__f0_11@PLT
@@ -83,7 +77,7 @@ _fun_start_:
 	.type _fun_start_,@function
 	.size _fun_start_,. - _fun_start_
 ==========
-.L120:
+.L109:
 	(Op Spill): Arg(reg#0) Res(stack#local#0) Live(reg#0)
 	(Op (Intop_imm Iadd -4)): Arg(reg#0) Res(reg#0) Live(stack#local#0)
 	(Call (F (Immediate (func camlRepetitive__f0_11) (label_after 100)))): Arg(reg#0) Res(reg#0) Live(stack#local#0)
@@ -135,20 +129,19 @@ It is possible to increase the "context". By default, the program looks at indiv
 A context length of 1 corresponds to looking at pairs of adjacent basic blocks of the cfg,
 and you can make this length arbitrarily long, though at the cost of (possibly) exponential explosion.
 
-Let us look at the same file, `repetitive.ml`, with a context length of 1.
+Let us look at the same file, `repetitive.ml`, with a context length of 1:
 
 ```bash
-rm -f /tmp/index.bin # remove the old, stale index
-dune exec bin/main.exe -- test/fixtures/repetitive.cmir-linear -index-file /tmp/index.bin  -context 1
-```
-
-and you should get output which looks like this:
-
-```asm
+$ rm -f /tmp/index.bin # remove the old, stale index
+$ dune exec bin/main.exe -- test/fixtures/repetitive.cmir-linear -index-file /tmp/index.bin  -context 1
+Building the index...
+[  8ms] Processing file 0/1; Index load: Symbolic_blocks: 2; Instructions: (basic: 8) (terminator: 2) 
+Saved index to /tmp/index.bin
+There are a total of 6 blocks matching the query criteria.
 Equivalence <0> with 3 members;
 	file: test/fixtures/repetitive.cmir-linear
 	function: camlRepetitive__f0_11
-Blocks (0 120): {
+Blocks (0 109): {
 	.file ""
 	.section .text._fun_start_,"ax",@progbits
 	.align	16
@@ -156,10 +149,10 @@ Blocks (0 120): {
 _fun_start_:
 	.cfi_startproc
 .L0:
-.L123:
+.L112:
 	cmpq	$3, %rax
 	jbe	.L102
-.L120:
+.L109:
 	movq	%rax, (%rsp)
 	addq	$-4, %rax
 	call	camlRepetitive__f0_11@PLT
@@ -181,8 +174,8 @@ _fun_start_:
 	Prologue: Arg() Res() Live()
 	#-(Branch
 	    (((Test (Iinttest_imm (Iunsigned Cle) 3)) 102)
-	        ((Test (Iinttest_imm (Iunsigned Cgt) 3)) 120)))-# Arg(reg#0) Res() Live() 
-.L120:
+	        ((Test (Iinttest_imm (Iunsigned Cgt) 3)) 109)))-# Arg(reg#0) Res() Live() 
+.L109:
 	(Op Spill): Arg(reg#0) Res(stack#local#0) Live(reg#0)
 	(Op (Intop_imm Iadd -4)): Arg(reg#0) Res(reg#0) Live(stack#local#0)
 	(Call (F (Immediate (func camlRepetitive__f0_11) (label_after 100)))): Arg(reg#0) Res(reg#0) Live(stack#local#0)
@@ -196,8 +189,6 @@ _fun_start_:
 	Reloadretaddr: Arg() Res() Live()
 	#-Return-# Arg(reg#0) Res() Live() 
 }
-
-
 Equivalence <1> with 3 members;
 	file: test/fixtures/repetitive.cmir-linear
 	function: camlRepetitive__f0_11
@@ -209,9 +200,9 @@ Blocks (0 102): {
 _fun_start_:
 	.cfi_startproc
 .L0:
-.L124:
+.L113:
 	cmpq	$3, %rax
-	ja	.L120
+	ja	.L109
 .L102:
 	movq	$3, %rax
 	ret
@@ -223,13 +214,14 @@ _fun_start_:
 	Prologue: Arg() Res() Live()
 	#-(Branch
 	    (((Test (Iinttest_imm (Iunsigned Cle) 3)) 102)
-	        ((Test (Iinttest_imm (Iunsigned Cgt) 3)) 120)))-# Arg(reg#0) Res() Live() 
+	        ((Test (Iinttest_imm (Iunsigned Cgt) 3)) 109)))-# Arg(reg#0) Res() Live() 
 .L102:
 	(Op (Const_int 3)): Arg() Res(reg#0) Live()
 	Reloadretaddr: Arg() Res() Live()
 	#-Return-# Arg(reg#0) Res() Live() 
 }
 ```
+
 
 Notice that this time, each printout is composed of two basic blocks glued together; the first one is made of 0 and 120, and the second one of 0 and 102, and the layout is different, but the code contained inside is the same, and the CFG for block 0 is the same in both.
 
@@ -274,8 +266,8 @@ values, and so on.
 To search for this pattern, we need to compose a file containing the matching pattern:
 
 
-``` 
-$ cat matcher.sexp
+```
+$ cat doc/matcher.sexp
 (
  (desc (Basic (Op (Intop_imm Iadd -2))))
  (arg (0))
@@ -311,9 +303,58 @@ Also see that this matcher example crosses basic block boundaries, so it needs t
 
 After this, we can run the command
 
-```
-rm -f /tmp/index.bin
-dune exec bin/main.exe -- test/fixtures/long_function.cmir-linear -index-file /tmp/index.bin -context 1 -use-subsequence-matcher ~/matcher.sexp
+```bash
+$ ocamlopt -save-ir-after linearize -stop-after linearize test/fixtures/long_function.ml
+$ rm -f /tmp/index.bin 
+$ dune exec bin/main.exe -- test/fixtures/long_function.cmir-linear -index-file /tmp/index.bin -context 1 -use-subsequence-matcher doc/matcher.sexp
+Loading matcher from doc/matcher.sexp
+Building the index...
+[  9ms] Processing file 0/1; Index load: Symbolic_blocks: 20; Instructions: (basic: 20) (terminator: 5) 
+Saved index to /tmp/index.bin
+There are a total of 2 blocks matching the query criteria.
+Equivalence <4> with 2 members;
+	file: test/fixtures/long_function.cmir-linear
+	function: camlLong_function__matrix_multiply_8
+Blocks (107 119): {
+	.file ""
+	.section .text._fun_start_,"ax",@progbits
+	.align	16
+	.globl	_fun_start_
+_fun_start_:
+	.cfi_startproc
+.L107:
+	movq	$1, %rdi
+	call	camlStdlib__array__make_matrix_142@PLT
+.L100:
+	movq	$1, %rdx
+	movq	(%rsp), %rbx
+	addq	$-2, %rbx
+	cmpq	%rbx, %rdx
+	jg	.L101
+.L119:
+	movq	%rbx, (%rsp)
+	jmp	.L102
+	.cfi_endproc
+	.type _fun_start_,@function
+	.size _fun_start_,. - _fun_start_
+==========
+.L107:
+	(Op (Const_int 1)): Arg() Res(reg#2) Live(stack#local#0 stack#local#1 stack#local#2 stack#local#3 stack#local#4 reg#1
+	    reg#0)
+	(Call
+	    (F
+	        (Immediate (func camlStdlib__array__make_matrix_142)
+	            (label_after 100)))): Arg(reg#0 reg#1 reg#2) Res(reg#0) Live(stack#local#0 stack#local#1 stack#local#2 stack#local#3 stack#local#4)
+	(Op (Const_int 1)): Arg() Res(reg#4) Live(stack#local#0 stack#local#1 stack#local#2 stack#local#3 stack#local#4 reg#0)
+	(Op Reload): Arg(stack#local#0) Res(reg#1) Live(stack#local#1 stack#local#2 stack#local#3 stack#local#4 reg#4 reg#0)
+	(Op (Intop_imm Iadd -2)): Arg(reg#1) Res(reg#1) Live(stack#local#1 stack#local#2 stack#local#3 stack#local#4 reg#4 reg#0)
+	#-(Branch
+	    (((Test (Iinttest (Isigned Cgt))) 101)
+	        ((Test (Iinttest (Isigned Cle))) 119)))-# Arg(reg#4 reg#1) Res() Live() 
+.L119:
+	(Op Spill): Arg(reg#1) Res(stack#local#0) Live(stack#local#1 stack#local#2 stack#local#3 stack#local#4 reg#4 reg#0)
+	#-(Branch ((Always 102)))-# Arg() Res() Live() 
+}
 ```
 
 and see that there is a single occurance of this pattern.
@@ -327,12 +368,86 @@ your custom predicate.
 Say we want to create a pattern matcher which just looks for `add` instructions; let's call this
 matcher `simple_add`.
 
-We then create the file `patterns/pattern_simple_add.ml`, and then pass it to the program by via the `-use-whole-block-matcher` flag:
+We then create the file `patterns/pattern_simple_add.ml`:
 
+```bash
+$ cat patterns/pattern_simple_add.ml
+open Instr_freq
+open! Core
 
+let f ~(block : Index.Matcher.Whole_block_predicate.block) =
+  Lib.any_suffix ~block ~f:(function
+    | { desc = Basic (Op (Types.From_cfg.Intop Types.From_mach.Iadd));
+        arg = _;
+        res = _
+      }
+      :: _ ->
+        true
+    | _ -> false)
+;;
 ```
-rm -f /tmp/index.bin
-dune exec bin/main.exe -- test/fixtures/long_function.cmir-linear -index-file /tmp/index.bin -context 1 -use-whole-block-matcher simple_add
+
+and then pass it to the program by via the `-use-whole-block-matcher` flag:
+
+
+```bash
+$ rm -f /tmp/index.bin
+$ dune exec bin/main.exe -- test/fixtures/repetitive.cmir-linear -index-file /tmp/index.bin -context 1 -use-whole-block-matcher simple_add
+Building the index...
+[  8ms] Processing file 0/1; Index load: Symbolic_blocks: 2; Instructions: (basic: 8) (terminator: 2) 
+Saved index to /tmp/index.bin
+There are a total of 3 blocks matching the query criteria.
+Equivalence <0> with 3 members;
+	file: test/fixtures/repetitive.cmir-linear
+	function: camlRepetitive__f0_11
+Blocks (0 109): {
+	.file ""
+	.section .text._fun_start_,"ax",@progbits
+	.align	16
+	.globl	_fun_start_
+_fun_start_:
+	.cfi_startproc
+.L0:
+.L112:
+	cmpq	$3, %rax
+	jbe	.L102
+.L109:
+	movq	%rax, (%rsp)
+	addq	$-4, %rax
+	call	camlRepetitive__f0_11@PLT
+.L100:
+	movq	%rax, 8(%rsp)
+	movq	(%rsp), %rax
+	addq	$-2, %rax
+	call	camlRepetitive__f0_11@PLT
+.L101:
+	movq	8(%rsp), %rbx
+	addq	%rbx, %rax
+	decq	%rax
+	ret
+	.cfi_endproc
+	.type _fun_start_,@function
+	.size _fun_start_,. - _fun_start_
+==========
+.L0:
+	Prologue: Arg() Res() Live()
+	#-(Branch
+	    (((Test (Iinttest_imm (Iunsigned Cle) 3)) 102)
+	        ((Test (Iinttest_imm (Iunsigned Cgt) 3)) 109)))-# Arg(reg#0) Res() Live() 
+.L109:
+	(Op Spill): Arg(reg#0) Res(stack#local#0) Live(reg#0)
+	(Op (Intop_imm Iadd -4)): Arg(reg#0) Res(reg#0) Live(stack#local#0)
+	(Call (F (Immediate (func camlRepetitive__f0_11) (label_after 100)))): Arg(reg#0) Res(reg#0) Live(stack#local#0)
+	(Op Spill): Arg(reg#0) Res(stack#local#1) Live(stack#local#0)
+	(Op Reload): Arg(stack#local#0) Res(reg#0) Live(stack#local#1)
+	(Op (Intop_imm Iadd -2)): Arg(reg#0) Res(reg#0) Live(stack#local#1)
+	(Call (F (Immediate (func camlRepetitive__f0_11) (label_after 101)))): Arg(reg#0) Res(reg#0) Live(stack#local#1)
+	(Op Reload): Arg(stack#local#1) Res(reg#1) Live(reg#0)
+	(Op (Intop Iadd)): Arg(reg#0 reg#1) Res(reg#0) Live()
+	(Op (Intop_imm Iadd -1)): Arg(reg#0) Res(reg#0) Live()
+	Reloadretaddr: Arg() Res() Live()
+	#-Return-# Arg(reg#0) Res() Live() 
+}
 ```
 
 ## <a name="equivalenceclasses"> Equivalence classes </a>
@@ -384,7 +499,7 @@ and *if* their registers are equivalent.
 
 The tool is currently in an experimental state, and requires specific versions of libraries to function:
 
-```bash
+```
 opam pin add ppx_compare https://github.com/janestreet/ppx_compare.git\#58696fd0a9aac7be49fef0ab1ff6798dad3c8a72
 opam pin add ppx_hash https://github.com/janestreet/ppx_hash.git\#b69549c05cad09a900e3708c7216761b19dae075
 opam pin add ocamlcfg https://github.com/gretay-js/ocamlcfg.git
@@ -400,5 +515,5 @@ There are automated tests, based on dune's output diff-ing.
 You can run them with:
 
 ```bash
-dune runtest
+$ dune runtest
 ```
