@@ -2,6 +2,9 @@ open Instr_freq
 open Core
 open Equivalence
 
+(* This is a simple implementation, and for now considers something used if
+   it appears in the [args] of an instruction, and considers something
+   defined if it appears in the [res] of an instruction. *)
 type t
 
 type uses =

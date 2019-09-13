@@ -400,8 +400,6 @@ let to_file t ~filename =
   (* We cannot directly marshal Core's hash tables themselves, as they
      contain closures. *)
   let as_alist =
-    (* Sanity check, that we did not somehow end up with a discontinuous
-       frequency array. *)
     let n_classes = Hashtbl.length t.symbolic_block_index in
     if n_classes = 0 then
       failwith

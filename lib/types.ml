@@ -1,3 +1,6 @@
+(* This file contains redefinitions of the compiler types, plus useful
+   @@deriving statements, which make them easier to use overall, and also
+   makes integration with Core easier. *)
 open Core
 open Ocamlcfg
 
