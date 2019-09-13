@@ -1,4 +1,6 @@
 (library
  (name patterns)
  (libraries core instr_freq)
+ (inline_tests)
+ (preprocess (pps ppx_jane))
 )
