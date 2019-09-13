@@ -11,12 +11,17 @@ let main ~files ~output =
           let module_name =
             Filename.basename file |> Filename.chop_extension
           in
-          Scanf.sscanf module_name "pattern_%s" (fun pattern_name ->
-              print
-                "\t\"%s\", (module %s : \
-                 Index.Matcher.Whole_block_predicate.S);\n"
-                pattern_name
-                (String.capitalize module_name)));
+          if
+            Filename.check_suffix module_name ".pp"
+            (* Ignore pretty printed files *)
+          then ()
+          else
+            Scanf.sscanf module_name "pattern_%s" (fun pattern_name ->
+                print
+                  "\t\"%s\", (module %s : \
+                   Index.Matcher.Whole_block_predicate.S);\n"
+                  pattern_name
+                  (String.capitalize module_name)));
       print "]\n;;\n")
 ;;
 
