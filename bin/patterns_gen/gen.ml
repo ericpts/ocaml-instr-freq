@@ -29,13 +29,14 @@ let main_command =
   Command.basic ~summary:"Generate patterns file."
     ~readme:(fun () ->
       "To be used for automatic generation of patterns meta-file.")
-    [%map_open.Command.Let_syntax
-      let files =
+    Command.Let_syntax.(
+    let%map_open
+      files =
         anon (sequence ("ml-files-with-patterns" %: Filename.arg_type))
       and output =
         flag "-o" (required Filename.arg_type) ~doc:"Output file"
       in
-      fun () -> main ~files ~output]
+      fun () -> main ~files ~output)
 ;;
 
 let () = Command.run main_command

@@ -1,0 +1,24 @@
+opam-version: "2.0"
+name: "ocaml-instr-freq"
+maintainer: "Eric Stavarache <ericptst@gmail.com>"
+authors: "Eric Stavarache <ericptst@gmail.com>"
+homepage: "https://github.com/ericpts/ocaml-instr-freq"
+bug-reports: "https://github.com/ericpts/ocaml-instr-freq/issues"
+license: "GNU Lesser General Public License version 2.1"
+dev-repo: "git+https://ericpts/ocaml-instr-freq.git"
+build: [
+  ["dune" "subst"] {pinned}
+  ["dune" "build" "-p" name "-j" jobs]
+]
+depends: [
+  "ocaml" {>= "4.09"}
+  "dune" {build & >= "1.8"}
+  "ocamlcfg"
+  "core"
+  "async"
+  "ppx_jane" {>= "v0.13.0"}
+]
+synopsis: "Count frequency of basic blocks in OCaml native code"
+description: "This is useful for knowing which optimizations
+would have the most impact, if they were to be implemented in the compiler.
+Currently, this only works for x86-64 targets. "

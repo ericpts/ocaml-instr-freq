@@ -1,12 +1,12 @@
-open Ocamlcfg
+module BB = Ocamlcfg.Cfg.Basic_block
 
 type t
 
-val create : Cfg.block -> t
+val create : BB.t -> t
 
-val append_successor : t -> Cfg.block -> t
+val append_successor : t -> BB.t -> t
 
-val to_list : t -> Cfg.block List.t
+val to_list : t -> BB.t List.t
 
 type block_print_mode =
   | As_assembly

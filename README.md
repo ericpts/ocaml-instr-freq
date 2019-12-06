@@ -36,7 +36,7 @@ let rec f2 n =
 First, you need to tell the ocaml compiler to save the linear representation of your sources:
 
 ```bash
-$ ocamlopt -save-ir-after linearize -stop-after linearize test/fixtures/repetitive.ml
+$ ocamlopt -save-ir-after scheduling -stop-after scheduling test/fixtures/repetitive.ml
 ```
 
 Next, run this program on the linear file 
@@ -495,18 +495,18 @@ which takes you from one block to the other.
 With all that's been said so far, two blocks are considered equivalent *if* their instructions are equivalent
 and *if* their registers are equivalent.
 
-## Pins required
+## Install with opam: pins required
 
 The tool is currently in an experimental state, and requires specific versions of libraries to function:
 
 ```
-opam pin add ppx_compare https://github.com/janestreet/ppx_compare.git\#58696fd0a9aac7be49fef0ab1ff6798dad3c8a72
-opam pin add ppx_hash https://github.com/janestreet/ppx_hash.git\#b69549c05cad09a900e3708c7216761b19dae075
+opam switch create 409 --empty
+opam pin add ocaml-variants https://github.com/gretay-js/ocaml.git#fdo409
 opam pin add ocamlcfg https://github.com/gretay-js/ocamlcfg.git
-opam pin add ocaml-migrate-parsetree https://github.com/gretay-js/ocaml-migrate-parsetree.git\#immediate64_ast408
-opam pin add ocaml-variants https://github.com/gretay-js/ocaml.git\#wip8
+opam pin add ocaml-instr-freq https://github.com/ericpts/ocaml-instr-freq.git
 ```
 
+Requires `ppx_hash` and `ppx_compare` from `v0.13.0`.
 
 ## Tests
 

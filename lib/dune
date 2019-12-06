@@ -2,6 +2,7 @@
  (name instr_freq)
  (libraries
   core
+  compiler-libs.optcomp
   ocamlcfg
  )
  (preprocess (pps ppx_jane))

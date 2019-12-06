@@ -1,6 +1,7 @@
 open Core
-open Ocamlcfg
 open Equivalence
+module Cfg = Ocamlcfg.Cfg
+module BB = Cfg.Basic_block
 
 let hash_fold_array = Utils.hash_fold_array
 
@@ -132,7 +133,7 @@ module Symbolic_block = struct
       Array.concat_map
         (Loop_free_block.to_list loop_free_block |> Array.of_list_rev)
         ~f:(fun block ->
-          List.map block.body ~f:(fun basic ->
+          List.map (BB.body block) ~f:(fun basic ->
               let desc =
                 get_id_for_basic basic.desc
                 |> Generic_instruction_equivalence.of_basic
@@ -140,10 +141,10 @@ module Symbolic_block = struct
               let arg, res = symbolize_registers_of basic in
               { With_register_information.desc; arg; res })
           @ [ (let desc =
-                 get_id_for_terminator block.terminator.desc
+                 get_id_for_terminator (BB.terminator block).desc
                  |> Generic_instruction_equivalence.of_terminator
                in
-               let arg, res = symbolize_registers_of block.terminator in
+               let arg, res = symbolize_registers_of (BB.terminator block) in
                { With_register_information.desc; arg; res })
             ]
           |> Array.of_list)
@@ -413,7 +414,7 @@ let to_file t ~filename =
     for i = n_classes to Array.length t.frequency - 1 do
       assert (t.frequency.(i) = 0)
     done;
-    Array.unsafe_truncate t.frequency ~len:n_classes;
+    t.frequency <- Array.init n_classes ~f:(Array.get t.frequency);
 
     ( Hashtbl.to_alist t.instruction_index.for_basic,
       Hashtbl.to_alist t.instruction_index.for_terminator,

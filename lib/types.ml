@@ -2,7 +2,7 @@
    @@deriving statements, which make them easier to use overall, and also
    makes integration with Core easier. *)
 open Core
-open Ocamlcfg
+module Cfg = Ocamlcfg.Cfg
 
 let chain_compare list =
   List.fold_until list ~init:0
@@ -130,7 +130,7 @@ module From_mach = struct
     | Iasr
     | Icomp of integer_comparison
     | Icheckbound of {
-        label_after_error : int sexp_option; [@compare.ignore]
+        label_after_error : int option; [@sexp.option] [@compare.ignore]
         spacetime_index : int; [@compare.ignore]
       }
   [@@deriving compare, sexp, hash]
@@ -208,15 +208,20 @@ module From_cfg = struct
 
   type func_call_operation = Cfg.func_call_operation =
     | Indirect of { label_after : int [@compare.ignore] }
-    | Immediate of {
-        func : string; [@compare.ignore]
+    | Direct of {
+        func_symbol : string; [@compare.ignore]
         label_after : int; [@compare.ignore]
       }
   [@@deriving compare, sexp, hash]
 
+  type tail_call_operation = Cfg.tail_call_operation =
+    | Self of { label_after : int [@compare.ignore] }
+    | Func of func_call_operation
+  [@@deriving compare, sexp, hash]
+
   type prim_call_operation = Cfg.prim_call_operation =
     | External of {
-        func : string; [@compare.ignore]
+        func_symbol : string; [@compare.ignore]
         alloc : bool;
         label_after : int; [@compare.ignore]
       }
@@ -241,7 +246,6 @@ module From_cfg = struct
     | Op of operation
     | Call of call_operation
     | Reloadretaddr
-    | Entertrap
     | Pushtrap of { lbl_handler : int [@compare.ignore] }
     | Poptrap
     | Prologue
@@ -272,7 +276,7 @@ module From_cfg = struct
     | Switch of switch_array
     | Return
     | Raise of From_cmm.raise_kind
-    | Tailcall of func_call_operation
+    | Tailcall of tail_call_operation
   [@@deriving compare, sexp, hash]
 
   (* XCR gyorsh for ericpts: I think I confused you about it earlier. We do
