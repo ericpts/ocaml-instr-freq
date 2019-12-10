@@ -1,0 +1,8 @@
+lib: [
+  "_build/install/default/lib/ocaml-instr-freq/META"
+  "_build/install/default/lib/ocaml-instr-freq/dune-package"
+  "_build/install/default/lib/ocaml-instr-freq/opam"
+]
+doc: [
+  "_build/install/default/doc/ocaml-instr-freq/README.md"
+]

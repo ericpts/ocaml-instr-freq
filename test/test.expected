@@ -1,40 +1,39 @@
 test_matching_functionality
 There are a total of 2 blocks matching the query criteria.
-Equivalence [38;5;6m<6>[0m with 1 members;
+Equivalence [38;5;6m<8>[0m with 1 members;
 	file: [38;5;6msimple.ml[0m
 	function: [38;5;6mcamlSimple__impl_36[0m
-[38;5;2mBlocks (105): {[0m
+[38;5;2mBlocks (107): {[0m
 	.file ""
-	.section .text._fun_start_,"ax",@progbits
+	.text
 	.align	16
 	.globl	_fun_start_
 _fun_start_:
 	.cfi_startproc
-.L105:
 	movq	%rax, %rdi
 	sarq	$1, %rdi
 	decq	%rbx
 	imulq	%rdi, %rbx
 	incq	%rbx
 	addq	$-2, %rax
-	jmp	camlSimple__impl_36@PLT
+	jmp	.L0
 	.cfi_endproc
 	.type _fun_start_,@function
 	.size _fun_start_,. - _fun_start_
 [38;5;2m}[0m
 test_index_bigger_file
-Equivalence [38;5;6m<1>[0m with 3 members;
+Equivalence [38;5;6m<2>[0m with 3 members;
 	file: [38;5;6mrepetitive.ml[0m
 	function: [38;5;6mcamlRepetitive__f0_11[0m
-[38;5;2mBlocks (109): {[0m
-.L109:
+[38;5;2mBlocks (113): {[0m
+.L113:
 	(Op Spill): Arg(reg#0) Res(stack#local#0) Live(reg#0)
 	(Op (Intop_imm Iadd -4)): Arg(reg#0) Res(reg#0) Live(stack#local#0)
-	(Call (F (Immediate (func camlRepetitive__f0_11) (label_after 100)))): Arg(reg#0) Res(reg#0) Live(stack#local#0)
+	(Call (F (Direct (func_symbol camlRepetitive__f0_11) (label_after 100)))): Arg(reg#0) Res(reg#0) Live(stack#local#0)
 	(Op Spill): Arg(reg#0) Res(stack#local#1) Live(stack#local#0)
 	(Op Reload): Arg(stack#local#0) Res(reg#0) Live(stack#local#1)
 	(Op (Intop_imm Iadd -2)): Arg(reg#0) Res(reg#0) Live(stack#local#1)
-	(Call (F (Immediate (func camlRepetitive__f0_11) (label_after 101)))): Arg(reg#0) Res(reg#0) Live(stack#local#1)
+	(Call (F (Direct (func_symbol camlRepetitive__f0_11) (label_after 101)))): Arg(reg#0) Res(reg#0) Live(stack#local#1)
 	(Op Reload): Arg(stack#local#1) Res(reg#1) Live(reg#0)
 	(Op (Intop Iadd)): Arg(reg#0 reg#1) Res(reg#0) Live()
 	(Op (Intop_imm Iadd -1)): Arg(reg#0) Res(reg#0) Live()
@@ -42,21 +41,19 @@ Equivalence [38;5;6m<1>[0m with 3 members;
 	#-Return-# Arg(reg#0) Res() Live() 
 [38;5;2m}[0m
 test_index_context
-Equivalence [38;5;6m<0>[0m with 3 members;
+Equivalence [38;5;6m<1>[0m with 3 members;
 	file: [38;5;6mrepetitive.ml[0m
 	function: [38;5;6mcamlRepetitive__f0_11[0m
-[38;5;2mBlocks (0 109): {[0m
+[38;5;2mBlocks (103 113): {[0m
 	.file ""
-	.section .text._fun_start_,"ax",@progbits
+	.text
 	.align	16
 	.globl	_fun_start_
 _fun_start_:
 	.cfi_startproc
-.L0:
-.L112:
 	cmpq	$3, %rax
 	jbe	.L102
-.L109:
+.L113:
 	movq	%rax, (%rsp)
 	addq	$-4, %rax
 	call	camlRepetitive__f0_11@PLT
@@ -74,19 +71,18 @@ _fun_start_:
 	.type _fun_start_,@function
 	.size _fun_start_,. - _fun_start_
 [38;5;2m==========[0m
-.L0:
-	Prologue: Arg() Res() Live()
+.L103:
 	#-(Branch
 	    (((Test (Iinttest_imm (Iunsigned Cle) 3)) 102)
-	        ((Test (Iinttest_imm (Iunsigned Cgt) 3)) 109)))-# Arg(reg#0) Res() Live() 
-.L109:
+	        ((Test (Iinttest_imm (Iunsigned Cgt) 3)) 113)))-# Arg(reg#0) Res() Live() 
+.L113:
 	(Op Spill): Arg(reg#0) Res(stack#local#0) Live(reg#0)
 	(Op (Intop_imm Iadd -4)): Arg(reg#0) Res(reg#0) Live(stack#local#0)
-	(Call (F (Immediate (func camlRepetitive__f0_11) (label_after 100)))): Arg(reg#0) Res(reg#0) Live(stack#local#0)
+	(Call (F (Direct (func_symbol camlRepetitive__f0_11) (label_after 100)))): Arg(reg#0) Res(reg#0) Live(stack#local#0)
 	(Op Spill): Arg(reg#0) Res(stack#local#1) Live(stack#local#0)
 	(Op Reload): Arg(stack#local#0) Res(reg#0) Live(stack#local#1)
 	(Op (Intop_imm Iadd -2)): Arg(reg#0) Res(reg#0) Live(stack#local#1)
-	(Call (F (Immediate (func camlRepetitive__f0_11) (label_after 101)))): Arg(reg#0) Res(reg#0) Live(stack#local#1)
+	(Call (F (Direct (func_symbol camlRepetitive__f0_11) (label_after 101)))): Arg(reg#0) Res(reg#0) Live(stack#local#1)
 	(Op Reload): Arg(stack#local#1) Res(reg#1) Live(reg#0)
 	(Op (Intop Iadd)): Arg(reg#0 reg#1) Res(reg#0) Live()
 	(Op (Intop_imm Iadd -1)): Arg(reg#0) Res(reg#0) Live()
@@ -94,18 +90,22 @@ _fun_start_:
 	#-Return-# Arg(reg#0) Res() Live() 
 [38;5;2m}[0m
 test_index_context_with_matcher
-Equivalence [38;5;6m<3>[0m with 2 members;
+Equivalence [38;5;6m<4>[0m with 2 members;
 	file: [38;5;6mlong_function.ml[0m
 	function: [38;5;6mcamlLong_function__matrix_multiply_8[0m
-[38;5;2mBlocks (118 107 119): {[0m
+[38;5;2mBlocks (108 107 122): {[0m
 	.file ""
-	.section .text._fun_start_,"ax",@progbits
+	.text
 	.align	16
 	.globl	_fun_start_
 _fun_start_:
 	.cfi_startproc
-.L118:
-	movq	$1, %rbx
+	cmpq	$1023, %rdi
+	jbe	.L125
+	movq	(%rbx), %rbx
+	movq	-8(%rbx), %rbx
+	shrq	$9, %rbx
+	orq	$1, %rbx
 	movq	%rbx, 8(%rsp)
 .L107:
 	movq	$1, %rdi
@@ -116,15 +116,24 @@ _fun_start_:
 	addq	$-2, %rbx
 	cmpq	%rbx, %rdx
 	jg	.L101
-.L119:
+.L122:
 	movq	%rbx, (%rsp)
 	jmp	.L102
+.L125:
+	call	caml_ml_array_bound_error@PLT
 	.cfi_endproc
 	.type _fun_start_,@function
 	.size _fun_start_,. - _fun_start_
 [38;5;2m==========[0m
-.L118:
-	(Op (Const_int 1)): Arg() Res(reg#1) Live(stack#local#0 stack#local#2 stack#local#3 stack#local#4 reg#0)
+.L108:
+	(Call
+	    (P
+	        (Checkbound (immediate (1023)) (label_after_error ())
+	            (spacetime_index 0)))): Arg(reg#2) Res() Live(stack#local#0 stack#local#2 stack#local#3 stack#local#4 reg#0 reg#1)
+	(Op (Load Word_val (Iindexed 0))): Arg(reg#1) Res(reg#1) Live(stack#local#0 stack#local#2 stack#local#3 stack#local#4 reg#0)
+	(Op (Load Word_int (Iindexed -8))): Arg(reg#1) Res(reg#1) Live(stack#local#0 stack#local#2 stack#local#3 stack#local#4 reg#0)
+	(Op (Intop_imm Ilsr 9)): Arg(reg#1) Res(reg#1) Live(stack#local#0 stack#local#2 stack#local#3 stack#local#4 reg#0)
+	(Op (Intop_imm Ior 1)): Arg(reg#1) Res(reg#1) Live(stack#local#0 stack#local#2 stack#local#3 stack#local#4 reg#0)
 	(Op Spill): Arg(reg#1) Res(stack#local#1) Live(stack#local#0 stack#local#2 stack#local#3 stack#local#4 reg#1 reg#0)
 	#-(Branch ((Always 107)))-# Arg() Res() Live() 
 .L107:
@@ -132,32 +141,30 @@ _fun_start_:
 	    reg#0)
 	(Call
 	    (F
-	        (Immediate (func camlStdlib__array__make_matrix_142)
+	        (Direct (func_symbol camlStdlib__array__make_matrix_142)
 	            (label_after 100)))): Arg(reg#0 reg#1 reg#2) Res(reg#0) Live(stack#local#0 stack#local#1 stack#local#2 stack#local#3 stack#local#4)
 	(Op (Const_int 1)): Arg() Res(reg#4) Live(stack#local#0 stack#local#1 stack#local#2 stack#local#3 stack#local#4 reg#0)
 	(Op Reload): Arg(stack#local#0) Res(reg#1) Live(stack#local#1 stack#local#2 stack#local#3 stack#local#4 reg#4 reg#0)
 	(Op (Intop_imm Iadd -2)): Arg(reg#1) Res(reg#1) Live(stack#local#1 stack#local#2 stack#local#3 stack#local#4 reg#4 reg#0)
 	#-(Branch
 	    (((Test (Iinttest (Isigned Cgt))) 101)
-	        ((Test (Iinttest (Isigned Cle))) 119)))-# Arg(reg#4 reg#1) Res() Live() 
-.L119:
+	        ((Test (Iinttest (Isigned Cle))) 122)))-# Arg(reg#4 reg#1) Res() Live() 
+.L122:
 	(Op Spill): Arg(reg#1) Res(stack#local#0) Live(stack#local#1 stack#local#2 stack#local#3 stack#local#4 reg#4 reg#0)
 	#-(Branch ((Always 102)))-# Arg() Res() Live() 
 [38;5;2m}[0m
 test_index_whole_block_matcher
 There are a total of 5 blocks matching the query criteria.
-Equivalence [38;5;6m<0>[0m with 2 members;
+Equivalence [38;5;6m<1>[0m with 2 members;
 	file: [38;5;6mlong_function.ml[0m
 	function: [38;5;6mcamlLong_function__matrix_multiply_8[0m
-[38;5;2mBlocks (0): {[0m
+[38;5;2mBlocks (109): {[0m
 	.file ""
-	.section .text._fun_start_,"ax",@progbits
+	.text
 	.align	16
 	.globl	_fun_start_
 _fun_start_:
 	.cfi_startproc
-.L0:
-.L122:
 	movq	%rax, 32(%rsp)
 	movq	%rbx, 24(%rsp)
 	movq	-8(%rax), %rax
@@ -171,13 +178,12 @@ _fun_start_:
 	movq	%rsi, 16(%rsp)
 	cmpq	$1, %rsi
 	jne	.L108
-	jmp	.L118
+	jmp	.L121
 	.cfi_endproc
 	.type _fun_start_,@function
 	.size _fun_start_,. - _fun_start_
 [38;5;2m==========[0m
-.L0:
-	Prologue: Arg() Res() Live(reg#0 reg#1)
+.L109:
 	(Op Spill): Arg(reg#0) Res(stack#local#4) Live(reg#0 reg#1)
 	(Op Spill): Arg(reg#1) Res(stack#local#3) Live(stack#local#4 reg#1 reg#0)
 	(Op (Load Word_int (Iindexed -8))): Arg(reg#0) Res(reg#0) Live(stack#local#3 stack#local#4 reg#1)
@@ -191,5 +197,5 @@ _fun_start_:
 	(Op Spill): Arg(reg#3) Res(stack#local#2) Live(stack#local#0 stack#local#3 stack#local#4 reg#3 reg#2 reg#0 reg#1)
 	#-(Branch
 	    (((Test (Iinttest_imm (Isigned Cne) 1)) 108)
-	        ((Test (Iinttest_imm (Isigned Ceq) 1)) 118)))-# Arg(reg#3) Res() Live() 
+	        ((Test (Iinttest_imm (Isigned Ceq) 1)) 121)))-# Arg(reg#3) Res() Live() 
 [38;5;2m}[0m

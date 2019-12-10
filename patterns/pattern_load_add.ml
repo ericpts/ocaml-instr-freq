@@ -12,9 +12,12 @@ let f ~(block : Index.Matcher.Whole_block_predicate.block) =
             Index.Matcher.Basic (Op (Intop _));
           arg = [| intop_input1; intop_input2 |];
           res = [| intop_output |]
-        }
-      ]
-      when load_destination = intop_input2 && intop_input1 = intop_output ->
-        true
+        } ] ->
+        if
+          Equivalence.Register_equivalence.equal load_destination
+            intop_input2
+          && Equivalence.Register_equivalence.equal intop_input1 intop_output
+        then true
+        else false
     | _ -> false)
 ;;

@@ -1,7 +1,6 @@
 open! Core
-open Ocamlcfg
 open Equivalence
-
+module Cfg = Ocamlcfg.Cfg
 (* An index is a collection of equivalence classes *)
 module T : sig
   type t

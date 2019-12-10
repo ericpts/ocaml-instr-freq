@@ -1,7 +1,10 @@
 (executable
  (name main)
+ (public_name ocaml-instr-freq)
+ (package ocaml-instr-freq)
  (libraries
   core
+  compiler-libs.optcomp
   ocamlcfg
   instr_freq
   patterns

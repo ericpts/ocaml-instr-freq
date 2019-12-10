@@ -162,8 +162,9 @@ let main_command =
     ~readme:(fun () ->
       "Group contents of basic blocks based on equivalence classes, and \
        print the most common classes.")
-    [%map_open.Command.Let_syntax
-      let anon_files = anon (sequence ("input" %: Filename.arg_type))
+    Command.Let_syntax.(
+      let%map_open anon_files =
+        anon (sequence ("input" %: Filename.arg_type))
       and n_real_blocks_to_print =
         flag "-print-n-real-blocks"
           (optional_with_default 1 int)
@@ -211,21 +212,21 @@ let main_command =
         flag "-use-whole-block-matcher"
           (optional Filename.arg_type)
           ~doc:
-            "patterns_name Print only symbolic blocks which match the \
-             given whole-block matcher. The given argument should be the \
-             name of a pattern, with a matching file \
+            "patterns_name Print only symbolic blocks which match the given \
+             whole-block matcher. The given argument should be the name of \
+             a pattern, with a matching file \
              patterns/pattern_${patterns_name}"
       and context_length =
         flag "-context-length"
           (optional_with_default 0 int)
           ~doc:
             "context How much context to include when building the index. \
-             From the CFG graph,we will take chains of length [context] \
-             and treat them as single blocks.This options permits us to \
-             look at more instructions and gain better insight, however \
-             the worst-case running time is exponential in this \
-             parameter.If you change this option, then you *must* rebuild \
-             the index. Defaults to 0."
+             From the CFG graph,we will take chains of length [context] and \
+             treat them as single blocks.This options permits us to look at \
+             more instructions and gain better insight, however the \
+             worst-case running time is exponential in this parameter.If \
+             you change this option, then you *must* rebuild the index. \
+             Defaults to 0."
       in
       let matcher_of_index =
         match (subsequence_matcher, whole_block_matcher) with
@@ -258,7 +259,7 @@ let main_command =
       fun () ->
         main files ~index_file ~n_real_blocks_to_print
           ~n_most_frequent_equivalences ~block_print_mode ~min_block_size
-          ~matcher_of_index ~context_length]
+          ~matcher_of_index ~context_length)
 ;;
 
 let () = Command.run main_command
